@@ -138,6 +138,42 @@
   }
   #status-dot.disconnected { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, .4); }
 
+  #address {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    min-width: 0;
+  }
+
+  #address-text {
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  #copy-btn {
+    flex-shrink: 0;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    padding: 4px 10px;
+    border-radius: .375rem;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent-hover);
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  #copy-btn:hover { background: rgba(45, 212, 191, .12); border-color: var(--accent); }
+  #copy-btn.copied { color: var(--accent); border-color: var(--accent); }
+
   #terminal {
     flex: 1;
     min-height: 0;
@@ -162,6 +198,10 @@
     <div id="chrome">
       <div id="status-dot"></div>
       <span id="status-text">webcli · connecting</span>
+      <div id="address">
+        <span id="address-text"></span>
+        <button id="copy-btn" type="button">Copy</button>
+      </div>
     </div>
     <div id="terminal"></div>
   </div>
@@ -191,6 +231,31 @@
         statusDot.classList.toggle('disconnected', !connected);
         statusText.textContent = `webcli · ${label}`;
       };
+
+      const addressText = document.getElementById('address-text');
+      const copyBtn = document.getElementById('copy-btn');
+      addressText.textContent = location.href;
+      addressText.title = location.href;
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(location.href);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = location.href;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        copyBtn.textContent = 'Copied';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+          copyBtn.classList.remove('copied');
+        }, 1500);
+      });
 
       const term = new Terminal({
         cursorBlink: true,
