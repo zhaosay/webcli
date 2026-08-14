@@ -1,0 +1,19 @@
+{
+  "name": "lan-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-based fully interactive PTY terminal for LAN access to this machine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true
+  }
+}
