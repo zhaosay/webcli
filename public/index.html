@@ -149,7 +149,7 @@
 <body>
   <div id="gate">
     <div class="gate-card">
-      <div class="gate-label">lan-terminal</div>
+      <div class="gate-label">webcli</div>
       <div class="gate-title">Enter access token</div>
       <form id="gate-form">
         <input id="token-input" type="password" autocomplete="off" autofocus>
@@ -161,7 +161,7 @@
   <div id="app">
     <div id="chrome">
       <div id="status-dot"></div>
-      <span id="status-text">lan-terminal · connecting</span>
+      <span id="status-text">webcli · connecting</span>
     </div>
     <div id="terminal"></div>
   </div>
@@ -189,7 +189,7 @@
       const statusText = document.getElementById('status-text');
       const setStatus = (connected, label) => {
         statusDot.classList.toggle('disconnected', !connected);
-        statusText.textContent = `lan-terminal · ${label}`;
+        statusText.textContent = `webcli · ${label}`;
       };
 
       const term = new Terminal({

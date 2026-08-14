@@ -1,5 +1,5 @@
 {
-  "name": "lan-terminal",
+  "name": "webcli",
   "version": "1.0.0",
   "private": true,
   "description": "Browser-based fully interactive PTY terminal for LAN access to this machine",

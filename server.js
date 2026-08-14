@@ -7,7 +7,7 @@ const WebSocket = require('ws');
 const pty = require('node-pty');
 
 const PORT = process.env.PROJECT_PORT || 3050;
-const DATA_DIR = path.join(__dirname, '..', 'data', 'lan-terminal');
+const DATA_DIR = path.join(__dirname, '..', 'data', 'webcli');
 const TOKEN_FILE = path.join(DATA_DIR, 'token.txt');
 const MAX_SESSIONS = 10;
 
@@ -137,13 +137,13 @@ process.on('SIGINT', shutdown);
 server.listen(PORT, '0.0.0.0', () => {
   const hostname = os.hostname();
   const mdnsHost = hostname.endsWith('.local') ? hostname : `${hostname}.local`;
-  console.log(`[lan-terminal] listening on 0.0.0.0:${PORT}`);
-  console.log(`[lan-terminal] open: http://${mdnsHost}:${PORT}/?token=${TOKEN}`);
+  console.log(`[webcli] listening on 0.0.0.0:${PORT}`);
+  console.log(`[webcli] open: http://${mdnsHost}:${PORT}/?token=${TOKEN}`);
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
       if (net.family === 'IPv4' && !net.internal) {
-        console.log(`[lan-terminal] fallback: http://${net.address}:${PORT}/?token=${TOKEN}`);
+        console.log(`[webcli] fallback: http://${net.address}:${PORT}/?token=${TOKEN}`);
       }
     }
   }
