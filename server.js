@@ -83,7 +83,9 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 wss.on('connection', (ws) => {
-  const shell = process.env.SHELL || '/bin/zsh';
+  const shell = process.platform === 'win32'
+    ? (process.env.COMSPEC || 'cmd.exe')
+    : (process.env.SHELL || '/bin/zsh');
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
     cols: 80,
