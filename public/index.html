@@ -107,7 +107,7 @@
   }
   #gate button:hover { background: var(--accent-hover); }
 
-  /* ---- terminal chrome ---- */
+  /* ---- app chrome ---- */
   #app {
     display: none;
     flex-direction: column;
@@ -121,22 +121,36 @@
     padding: 10px 14px;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .chrome-title {
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: .08em;
     text-transform: uppercase;
     color: var(--muted);
-    flex-shrink: 0;
+    cursor: pointer;
+    border-radius: .25rem;
+    padding: 2px 4px;
+    margin: -2px -4px;
   }
+  .chrome-title:hover { color: var(--accent-hover); background: rgba(45, 212, 191, .1); }
 
-  #status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--border-glow);
+  .chrome-title-input {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: #0f0f11;
+    border: 1px solid var(--accent);
+    border-radius: .25rem;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    outline: none;
+    width: 160px;
   }
-  #status-dot.disconnected { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, .4); }
 
   #address {
     display: flex;
@@ -151,9 +165,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 12px;
     color: var(--text);
-    letter-spacing: 0;
-    text-transform: none;
   }
 
   #copy-btn {
@@ -161,8 +175,6 @@
     font-family: var(--font-sans);
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
     padding: 4px 10px;
     border-radius: .375rem;
     border: 1px solid var(--border);
@@ -174,12 +186,103 @@
   #copy-btn:hover { background: rgba(45, 212, 191, .12); border-color: var(--accent); }
   #copy-btn.copied { color: var(--accent); border-color: var(--accent); }
 
-  #terminal {
+  /* ---- tab bar ---- */
+  #tabbar {
+    display: flex;
+    align-items: stretch;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+
+  #tabs { display: flex; }
+
+  .tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 8px 8px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .tab.active { color: var(--text); background: var(--bg); }
+  .tab.active::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  .tab-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #71717a;
+    flex-shrink: 0;
+  }
+  .tab-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--border-glow); }
+  .tab-dot.disconnected { background: #ef4444; }
+
+  .tab-close {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 3px;
+    border-radius: .25rem;
+  }
+  .tab-close:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
+
+  #new-tab-btn {
+    flex-shrink: 0;
+    width: 34px;
+    border: none;
+    border-right: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #new-tab-btn:hover { color: var(--accent-hover); background: rgba(45, 212, 191, .08); }
+  #new-tab-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ---- terminal panes ---- */
+  #panes {
+    position: relative;
     flex: 1;
     min-height: 0;
-    padding: 8px 10px;
     background: var(--bg);
   }
+
+  .pane {
+    position: absolute;
+    inset: 0;
+    padding: 8px 10px;
+    display: none;
+  }
+  .pane.active { display: block; }
+
+  #empty-state {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+  #empty-state.show { display: flex; }
 </style>
 </head>
 <body>
@@ -196,14 +299,19 @@
 
   <div id="app">
     <div id="chrome">
-      <div id="status-dot"></div>
-      <span id="status-text">webcli · connecting</span>
+      <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
       <div id="address">
         <span id="address-text"></span>
         <button id="copy-btn" type="button">Copy</button>
       </div>
     </div>
-    <div id="terminal"></div>
+    <div id="tabbar">
+      <div id="tabs"></div>
+      <button id="new-tab-btn" type="button" title="New terminal">+</button>
+    </div>
+    <div id="panes">
+      <div id="empty-state">No terminal open — click + to start one</div>
+    </div>
   </div>
 
   <script src="/vendor/xterm.js"></script>
@@ -225,12 +333,49 @@
     } else {
       document.getElementById('app').style.display = 'flex';
 
-      const statusDot = document.getElementById('status-dot');
-      const statusText = document.getElementById('status-text');
-      const setStatus = (connected, label) => {
-        statusDot.classList.toggle('disconnected', !connected);
-        statusText.textContent = `webcli · ${label}`;
+      const chromeTitle = document.getElementById('chrome-title');
+      const applyName = (name) => {
+        document.title = name;
+        chromeTitle.textContent = name;
       };
+      fetch('/api/name').then((r) => r.json()).then(({ name }) => { if (name) applyName(name); }).catch(() => {});
+
+      chromeTitle.addEventListener('click', () => {
+        const current = chromeTitle.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = current;
+        input.maxLength = 40;
+        input.className = 'chrome-title-input';
+        chromeTitle.replaceWith(input);
+        input.focus();
+        input.select();
+
+        const commit = async () => {
+          const value = input.value.trim();
+          input.replaceWith(chromeTitle);
+          if (!value || value === current) {
+            applyName(current);
+            return;
+          }
+          try {
+            const res = await fetch(`/api/name?token=${encodeURIComponent(token)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: value }),
+            });
+            const data = await res.json();
+            applyName(data.name || current);
+          } catch {
+            applyName(current);
+          }
+        };
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') input.blur();
+          if (e.key === 'Escape') { input.value = current; input.blur(); }
+        });
+        input.addEventListener('blur', commit, { once: true });
+      });
 
       const addressText = document.getElementById('address-text');
       const copyBtn = document.getElementById('copy-btn');
@@ -257,52 +402,145 @@
         }, 1500);
       });
 
-      const term = new Terminal({
-        cursorBlink: true,
-        scrollback: 5000,
-        fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-        theme: {
-          background: '#09090b',
-          foreground: '#e4e4e7',
-          cursor: '#2dd4bf',
-          selectionBackground: 'rgba(45, 212, 191, .25)',
-        },
-      });
-      const fitAddon = new FitAddon.FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(document.getElementById('terminal'));
-      fitAddon.fit();
+      const MAX_SESSIONS = 10;
+      const tabsEl = document.getElementById('tabs');
+      const panesEl = document.getElementById('panes');
+      const emptyStateEl = document.getElementById('empty-state');
+      const newTabBtn = document.getElementById('new-tab-btn');
 
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}`);
+      const sessions = new Map();
+      let sessionCounter = 0;
+      let activeId = null;
 
-      ws.onopen = () => {
-        setStatus(true, 'connected');
-        fitAddon.fit();
-        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-      };
-      ws.onmessage = (e) => term.write(e.data);
-      ws.onclose = () => {
-        setStatus(false, 'disconnected');
-        term.write('\r\n\x1b[31m[connection closed]\x1b[0m\r\n');
-      };
-      ws.onerror = () => {
-        setStatus(false, 'error');
-        term.write('\r\n\x1b[31m[connection error]\x1b[0m\r\n');
-      };
+      function updateEmptyState() {
+        emptyStateEl.classList.toggle('show', sessions.size === 0);
+      }
 
-      term.onData((data) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'input', data }));
+      function updateNewTabBtn() {
+        newTabBtn.disabled = sessions.size >= MAX_SESSIONS;
+      }
+
+      function sendResize(session) {
+        if (session.ws.readyState === WebSocket.OPEN) {
+          session.ws.send(JSON.stringify({ type: 'resize', cols: session.term.cols, rows: session.term.rows }));
         }
-      });
+      }
+
+      function activateSession(id) {
+        activeId = id;
+        panesEl.querySelectorAll('.pane').forEach((p) => p.classList.toggle('active', p.dataset.id === String(id)));
+        tabsEl.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.id === String(id)));
+        const session = sessions.get(id);
+        if (session) {
+          session.fitAddon.fit();
+          session.term.focus();
+          sendResize(session);
+        }
+      }
+
+      function closeSession(id) {
+        const session = sessions.get(id);
+        if (!session) return;
+        session.ws.close();
+        session.pane.remove();
+        session.tabEl.remove();
+        sessions.delete(id);
+        updateEmptyState();
+        updateNewTabBtn();
+        if (activeId === id) {
+          const remaining = [...sessions.keys()];
+          activeId = null;
+          if (remaining.length) activateSession(remaining[remaining.length - 1]);
+        }
+      }
+
+      function createSession() {
+        if (sessions.size >= MAX_SESSIONS) return;
+        const id = ++sessionCounter;
+
+        const pane = document.createElement('div');
+        pane.className = 'pane';
+        pane.dataset.id = String(id);
+        panesEl.appendChild(pane);
+
+        const tabEl = document.createElement('div');
+        tabEl.className = 'tab';
+        tabEl.dataset.id = String(id);
+        tabEl.innerHTML = '<span class="tab-dot"></span><span class="tab-label"></span><button class="tab-close" type="button">&times;</button>';
+        tabEl.querySelector('.tab-label').textContent = id;
+        tabsEl.appendChild(tabEl);
+
+        const term = new Terminal({
+          cursorBlink: true,
+          scrollback: 5000,
+          fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+          theme: {
+            background: '#09090b',
+            foreground: '#e4e4e7',
+            cursor: '#2dd4bf',
+            selectionBackground: 'rgba(45, 212, 191, .25)',
+          },
+        });
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(pane);
+
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}`);
+
+        const session = { id, term, fitAddon, ws, pane, tabEl, dot: tabEl.querySelector('.tab-dot') };
+        sessions.set(id, session);
+        updateEmptyState();
+        updateNewTabBtn();
+
+        const setDot = (state) => { session.dot.className = `tab-dot ${state}`; };
+
+        ws.onopen = () => {
+          setDot('connected');
+          if (activeId === id) {
+            fitAddon.fit();
+            sendResize(session);
+          }
+        };
+        ws.onmessage = (e) => term.write(e.data);
+        ws.onclose = () => {
+          setDot('disconnected');
+          term.write('\r\n\x1b[31m[connection closed]\x1b[0m\r\n');
+        };
+        ws.onerror = () => {
+          setDot('disconnected');
+          term.write('\r\n\x1b[31m[connection error]\x1b[0m\r\n');
+        };
+
+        term.onData((data) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'input', data }));
+          }
+        });
+
+        tabEl.addEventListener('click', (e) => {
+          if (e.target.closest('.tab-close')) return;
+          activateSession(id);
+        });
+        tabEl.querySelector('.tab-close').addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeSession(id);
+        });
+
+        activateSession(id);
+      }
+
+      newTabBtn.addEventListener('click', createSession);
 
       window.addEventListener('resize', () => {
-        fitAddon.fit();
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        const session = sessions.get(activeId);
+        if (session) {
+          session.fitAddon.fit();
+          sendResize(session);
         }
       });
+
+      createSession();
     }
   </script>
 </body>

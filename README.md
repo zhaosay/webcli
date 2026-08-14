@@ -5,7 +5,8 @@
 - 后端：Node.js + [`node-pty`](https://github.com/microsoft/node-pty)（起真实 shell 进程）+ [`ws`](https://github.com/websockets/ws)（WebSocket）
 - 前端：[`xterm.js`](https://xtermjs.org/)，无需安装，浏览器直接打开即可
 - 鉴权：单一共享 token，放在访问链接里，同局域网内没有 token 连不上
-- 每个浏览器标签页 = 一个独立的 shell 进程，互不共享，关闭标签页对应进程就会退出
+- 页面内自带 tab 栏，一个浏览器窗口就能开多个终端（点 `+` 新建、点 `×` 关闭），每个 tab 对应一个独立的 shell 进程，互不共享
+- 页面顶部的名字（默认是电脑的 hostname）点一下就能改，方便同时开着好几台电脑的页面时分清楚哪个 tab 是哪台机器
 
 ## 快速开始
 
@@ -32,6 +33,16 @@ cd webcli
 把这个完整链接（含 `?token=...`）复制给同一局域网内想要连接的另一台设备，用浏览器打开即可看到终端界面。页面顶部也有这个地址，带一键复制按钮。
 
 默认端口 `3050`，可以用环境变量覆盖：`PROJECT_PORT=8080 ./start.sh`。
+
+## 更新
+
+代码有更新时，在项目目录里跑一下（或者 macOS 双击 `update.command` / Windows 双击 `update.bat`）：
+
+```bash
+./update.sh
+```
+
+会自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动），如果 `package.json`/`package-lock.json` 有变化会顺便 `npm install`。更新完需要手动重启一下服务（通过 Launcher.command，或者重新跑一次 `start.sh`/双击 `start.command`/`start.bat`）才会生效。
 
 ## 部署到别的电脑
 

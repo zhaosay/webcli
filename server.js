@@ -9,7 +9,9 @@ const pty = require('node-pty');
 const PORT = process.env.PROJECT_PORT || 3050;
 const DATA_DIR = path.join(__dirname, '..', 'data', 'webcli');
 const TOKEN_FILE = path.join(DATA_DIR, 'token.txt');
+const NAME_FILE = path.join(DATA_DIR, 'name.txt');
 const MAX_SESSIONS = 10;
+const MAX_NAME_LENGTH = 40;
 
 function loadOrCreateToken() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -22,6 +24,14 @@ function loadOrCreateToken() {
 }
 
 const TOKEN = loadOrCreateToken();
+
+function loadName() {
+  if (fs.existsSync(NAME_FILE)) {
+    const saved = fs.readFileSync(NAME_FILE, 'utf8').trim();
+    if (saved) return saved;
+  }
+  return os.hostname();
+}
 
 function tokenMatches(candidate) {
   if (typeof candidate !== 'string') return false;
@@ -40,7 +50,48 @@ const STATIC_FILES = {
 };
 
 const server = http.createServer((req, res) => {
-  const pathname = req.url.split('?')[0];
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  const pathname = parsedUrl.pathname;
+
+  if (pathname === '/api/name' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ name: loadName() }));
+    return;
+  }
+
+  if (pathname === '/api/name' && req.method === 'POST') {
+    if (!tokenMatches(parsedUrl.searchParams.get('token'))) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid token' }));
+      return;
+    }
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 1024) req.destroy();
+    });
+    req.on('end', () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid json' }));
+        return;
+      }
+      const name = typeof parsed.name === 'string' ? parsed.name.trim().slice(0, MAX_NAME_LENGTH) : '';
+      if (!name) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'name required' }));
+        return;
+      }
+      fs.writeFileSync(NAME_FILE, name);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ name }));
+    });
+    return;
+  }
+
   const entry = STATIC_FILES[pathname];
   if (!entry) {
     res.writeHead(404);
