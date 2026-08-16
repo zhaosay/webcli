@@ -10,6 +10,8 @@ const PORT = process.env.PROJECT_PORT || 3050;
 const DATA_DIR = path.join(__dirname, '..', 'data', 'webcli');
 const TOKEN_FILE = path.join(DATA_DIR, 'token.txt');
 const NAME_FILE = path.join(DATA_DIR, 'name.txt');
+const AUTH_FLAG_FILE = path.join(DATA_DIR, 'auth-enabled');
+const SECONDARY_KEY_FILE = path.join(DATA_DIR, 'secondary-key.txt');
 const MAX_SESSIONS = 10;
 const MAX_NAME_LENGTH = 40;
 
@@ -41,6 +43,23 @@ function tokenMatches(candidate) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// Secondary key is toggled independently via auth.sh (on/off/status) and is
+// re-read from disk on every check so flipping it never requires a restart
+// (a restart would kill every live pty/session).
+function isAuthEnabled() {
+  return fs.existsSync(AUTH_FLAG_FILE) && fs.readFileSync(AUTH_FLAG_FILE, 'utf8').trim() === '1';
+}
+
+function secondaryKeyMatches(candidate) {
+  if (!fs.existsSync(SECONDARY_KEY_FILE)) return false;
+  const key = fs.readFileSync(SECONDARY_KEY_FILE, 'utf8').trim();
+  if (typeof candidate !== 'string' || !key) return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(key);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 const STATIC_FILES = {
   '/': { file: path.join(__dirname, 'public', 'index.html'), type: 'text/html' },
   '/index.html': { file: path.join(__dirname, 'public', 'index.html'), type: 'text/html' },
@@ -52,6 +71,12 @@ const STATIC_FILES = {
 const server = http.createServer((req, res) => {
   const parsedUrl = new URL(req.url, 'http://localhost');
   const pathname = parsedUrl.pathname;
+
+  if (pathname === '/api/auth-status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ enabled: isAuthEnabled() }));
+    return;
+  }
 
   if (pathname === '/api/name' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -117,6 +142,12 @@ server.on('upgrade', (req, socket, head) => {
   const candidate = url.searchParams.get('token');
 
   if (!tokenMatches(candidate)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
+  if (isAuthEnabled() && !secondaryKeyMatches(url.searchParams.get('key'))) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;

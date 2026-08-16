@@ -29,7 +29,7 @@
   }
 
   /* ---- token gate ---- */
-  #gate {
+  #gate, #key-gate {
     display: none;
     position: relative;
     flex-direction: column;
@@ -297,6 +297,17 @@
     </div>
   </div>
 
+  <div id="key-gate">
+    <div class="gate-card">
+      <div class="gate-label">webcli</div>
+      <div class="gate-title">Enter secondary key</div>
+      <form id="key-gate-form">
+        <input id="key-input" type="password" autocomplete="off" autofocus>
+        <button type="submit">Continue</button>
+      </form>
+    </div>
+  </div>
+
   <div id="app">
     <div id="chrome">
       <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
@@ -331,6 +342,7 @@
         location.href = url.toString();
       });
     } else {
+      function startApp(secondaryKey) {
       document.getElementById('app').style.display = 'flex';
 
       const chromeTitle = document.getElementById('chrome-title');
@@ -486,7 +498,8 @@
         term.open(pane);
 
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}`);
+        const keyParam = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
+        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}${keyParam}`);
 
         const session = { id, term, fitAddon, ws, pane, tabEl, dot: tabEl.querySelector('.tab-dot') };
         sessions.set(id, session);
@@ -541,6 +554,29 @@
       });
 
       createSession();
+      } // end startApp
+
+      const SECONDARY_KEY_STORAGE = 'webcli-secondary-key';
+      fetch('/api/auth-status').then((r) => r.json()).then(({ enabled }) => {
+        if (!enabled) {
+          startApp(null);
+          return;
+        }
+        const stored = sessionStorage.getItem(SECONDARY_KEY_STORAGE);
+        if (stored) {
+          startApp(stored);
+          return;
+        }
+        document.getElementById('key-gate').style.display = 'flex';
+        document.getElementById('key-gate-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const v = document.getElementById('key-input').value.trim();
+          if (!v) return;
+          sessionStorage.setItem(SECONDARY_KEY_STORAGE, v);
+          document.getElementById('key-gate').style.display = 'none';
+          startApp(v);
+        });
+      }).catch(() => startApp(null));
     }
   </script>
 </body>

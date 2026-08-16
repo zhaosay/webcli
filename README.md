@@ -4,7 +4,7 @@
 
 - 后端：Node.js + [`node-pty`](https://github.com/microsoft/node-pty)（起真实 shell 进程）+ [`ws`](https://github.com/websockets/ws)（WebSocket）
 - 前端：[`xterm.js`](https://xtermjs.org/)，无需安装，浏览器直接打开即可
-- 鉴权：单一共享 token，放在访问链接里，同局域网内没有 token 连不上
+- 鉴权：单一共享 token，放在访问链接里，同局域网内没有 token 连不上；可选再加一道独立的二次验证密钥（见下）
 - 页面内自带 tab 栏，一个浏览器窗口就能开多个终端（点 `+` 新建、点 `×` 关闭），每个 tab 对应一个独立的 shell 进程，互不共享
 - 页面顶部的名字（默认是电脑的 hostname）点一下就能改，方便同时开着好几台电脑的页面时分清楚哪个 tab 是哪台机器
 
@@ -43,6 +43,18 @@ cd webcli
 ```
 
 会自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动），如果 `package.json`/`package-lock.json` 有变化会顺便 `npm install`。更新完需要手动重启一下服务（通过 Launcher.command，或者重新跑一次 `start.sh`/双击 `start.command`/`start.bat`）才会生效。
+
+## 二次验证（可选，默认关闭）
+
+访问链接里的 token 一旦泄露（比如浏览器历史记录、截图、分享到群里），任何人都能连进来。如果需要多一道独立防护，可以开启二次验证——除了 URL 里的 token，还需要**单独输入**一把密钥（不放在 URL 里，不容易跟链接一起泄露）：
+
+```bash
+./auth.sh on       # 开启，每次都会生成一把新密钥
+./auth.sh off      # 关闭
+./auth.sh status   # 查看当前状态/密钥
+```
+
+开关**立即生效，不需要重启服务**（不会打断正在跑的终端）。开启后浏览器打开链接会多弹一个"输入二次验证密钥"的框，输入一次后这个浏览器标签页会记住（`sessionStorage`，关闭标签页就清掉），不用每个新 tab 都重复输入。密钥请单独发给需要连接的人，不要和访问链接放在一起分享。
 
 ## 部署到别的电脑
 
