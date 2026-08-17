@@ -8,41 +8,59 @@
 - 页面内自带 tab 栏，一个浏览器窗口就能开多个终端（点 `+` 新建、点 `×` 关闭），每个 tab 对应一个独立的 shell 进程，互不共享
 - 页面顶部的名字（默认是电脑的 hostname）点一下就能改，方便同时开着好几台电脑的页面时分清楚哪个 tab 是哪台机器
 
-## 快速开始
+## 安装（被控端：这台电脑要被远程操作）
+
+同一局域网内，**每台**想被远程操作的电脑都要各自装一份、各自起一个实例——谁的电脑跑这个服务，谁的终端就被暴露出来，不存在"装一次，所有电脑共用"。
 
 **前提**：装好 [Node.js](https://nodejs.org/)（建议 18 及以上版本）。
 
-```bash
-git clone https://github.com/zhaosay/webcli.git
-cd webcli
-```
+1. 克隆代码：
+   ```bash
+   git clone https://github.com/zhaosay/webcli.git
+   # 私有仓库、且该电脑已登录有权限的 GitHub 账号，也可以用：
+   # gh repo clone zhaosay/webcli
+   cd webcli
+   ```
+2. 启动：
+   - **macOS**：双击 `start.command`，或命令行 `./start.sh`
+   - **Windows**：双击 `start.bat`
+   
+   首次启动会自动 `npm install` 装依赖（`node-pty` 是原生模块，如果提示要跑 `npm approve-scripts node-pty`，跑一下就行）。
+3. 启动成功后，终端里会打印访问地址：
+   ```
+   [webcli] open: http://<这台电脑名>.local:3050/?token=xxxxxxxxxxxxxxxx
+   ```
+   这就是别人要用来连接这台电脑的完整链接。
 
-**macOS**：双击 `start.command`（会自动弹出一个 Terminal 窗口跑起来），或者命令行执行：
-```bash
-./start.sh
-```
+- Token 每台电脑各自生成一份，存在代码目录上一级的 `../data/webcli/token.txt`，不进 git、不跨机器共用；只要不删这个文件，重启服务链接不变
+- 默认端口 `3050`，可用环境变量覆盖：`PROJECT_PORT=8080 ./start.sh`
+- 想开机自启/常驻，自己包一层 `nohup ./start.sh &`，或写个系统级自启动项
 
-**Windows**：双击 `start.bat`。
+## 更新（被控端）
 
-首次启动会自动 `npm install` 装依赖。启动成功后，终端里会打印出访问地址，形如：
-
-```
-[webcli] open: http://<你的电脑名>.local:3050/?token=xxxxxxxxxxxxxxxx
-```
-
-把这个完整链接（含 `?token=...`）复制给同一局域网内想要连接的另一台设备，用浏览器打开即可看到终端界面。页面顶部也有这个地址，带一键复制按钮。
-
-默认端口 `3050`，可以用环境变量覆盖：`PROJECT_PORT=8080 ./start.sh`。
-
-## 更新
-
-代码有更新时，在项目目录里跑一下（或者 macOS 双击 `update.command` / Windows 双击 `update.bat`）：
+代码有更新时，在项目目录里跑（或 macOS 双击 `update.command` / Windows 双击 `update.bat`）：
 
 ```bash
 ./update.sh
 ```
 
-会自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动），如果 `package.json`/`package-lock.json` 有变化会顺便 `npm install`。更新完需要手动重启一下服务（通过 Launcher.command，或者重新跑一次 `start.sh`/双击 `start.command`/`start.bat`）才会生效。
+自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动），`package.json`/`package-lock.json` 有变化会顺便 `npm install`。**更新完要手动重启服务**（重新跑一次 `start.sh` 或双击 `start.command`/`start.bat`）才会生效。
+
+## 打开（客户端：在别的设备上访问）
+
+想临时操作某台电脑的人，**不需要装任何东西**：
+
+1. 确认自己的设备（电脑/手机）和目标电脑在同一局域网
+2. 拿到目标电脑给的访问链接（形如 `http://xxx.local:3050/?token=xxx`，见上面"安装"步骤 3 或下面"分享"）
+3. 浏览器直接打开这个链接，即可看到并操作终端
+
+页面内自带 tab 栏，点 `+` 可以再开一个终端（各 tab 是独立 shell 进程）；页面顶部名字（默认是电脑 hostname）点一下能改，方便同时开多台电脑时区分。
+
+## 分享（把访问链接发给别人）
+
+- 被控端启动时终端打印的 `open:` 那行，就是完整访问链接，直接复制发给对方
+- 或者：被控端自己先用浏览器打开这个链接，页面顶部地址栏旁边有个 **Copy** 按钮，点一下把当前网址复制到剪贴板，再转发给要连接的人
+- 链接里带 token，泄露给谁、就是把这台电脑的 shell 权限给了谁——不要发到公开/大群里（更多风险见下面"安全说明"）
 
 ## 二次验证（可选，默认关闭）
 
@@ -55,21 +73,6 @@ cd webcli
 ```
 
 开关**立即生效，不需要重启服务**（不会打断正在跑的终端）。开启后浏览器打开链接会多弹一个"输入二次验证密钥"的框，输入一次后这个浏览器标签页会记住（`sessionStorage`，关闭标签页就清掉），不用每个新 tab 都重复输入。密钥请单独发给需要连接的人，不要和访问链接放在一起分享。
-
-## 部署到别的电脑
-
-同一局域网内每台想被远程操作的电脑，都各自 clone 一份、各自启动一个实例（谁的电脑跑这个服务，谁的终端就被暴露出来）：
-
-```bash
-gh repo clone zhaosay/webcli   # 私有仓库，需要该机器已登录有权限的 GitHub 账号
-cd webcli
-npm install
-npm approve-scripts node-pty   # 如果 npm install 提示了这一步就跑一下（node-pty 是原生模块）
-./start.sh
-```
-
-- Token 是**每台机器各自生成**的，存在代码目录上一级的 `../data/webcli/token.txt`，不会被 git 跟踪，也不会在多台机器间共用
-- 想要开机自启/常驻后台，可以自己包一层 `nohup ./start.sh &`，或者写个系统级的自启动项
 
 ## 安全说明（请务必了解）
 
