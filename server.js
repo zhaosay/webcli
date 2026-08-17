@@ -1,7 +1,8 @@
 const http = require('http');
 const os = require('os');
+const fs = require('fs');
 const WebSocket = require('ws');
-const { PORT } = require('./lib/config');
+const { PORT, DATA_DIR, PID_FILE } = require('./lib/config');
 const { TOKEN } = require('./lib/auth');
 const { createRequestHandler } = require('./lib/routes');
 const { handleUpgrade, shutdownAll } = require('./lib/pty-sessions');
@@ -16,12 +17,15 @@ server.on('upgrade', (req, socket, head) => {
 
 function shutdown() {
   shutdownAll();
+  try { fs.unlinkSync(PID_FILE); } catch {}
   process.exit(0);
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 server.listen(PORT, '0.0.0.0', () => {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(PID_FILE, String(process.pid));
   const hostname = os.hostname();
   const mdnsHost = hostname.endsWith('.local') ? hostname : `${hostname}.local`;
   const commitLabel = VERSION_INFO.commit ? ` (${VERSION_INFO.commit})` : '';

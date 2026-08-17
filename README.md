@@ -46,7 +46,12 @@
 ./update.sh
 ```
 
-自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动；`package-lock.json` 是各机器 `npm install` 自动生成的文件，脚本会先丢弃它的本地改动再拉取，不会因为这个卡住），`package.json`/`package-lock.json` 有变化会顺便 `npm install`。**更新完要手动重启服务**（重新跑一次 `start.sh` 或双击 `start.command`/`start.bat`）才会生效。
+自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动；`package-lock.json` 是各机器 `npm install` 自动生成的文件，脚本会先丢弃它的本地改动再拉取，不会因为这个卡住），`package.json`/`package-lock.json` 有变化会顺便 `npm install`，**装完会自动杀掉旧进程、重启服务**，不需要再手动操作——同一个终端窗口会从"更新日志"无缝切到"服务运行日志"。杀旧进程不会丢 token/配置，重开后访问链接不变。
+
+如果自动重启没生效（比如旧版本没有这个功能、进程识别不到），再手动来一下：
+
+- **macOS**：`lsof -ti:3050 | xargs kill && ./start.sh`
+- **Windows**：`netstat -ano | findstr :3050` 查 PID，`taskkill /PID <PID> /F`，再 `start.bat`
 
 多台电脑各自更新，版本容易不一致——启动时终端会打印 `[webcli] version: v0.2.0 (b531cb2)`，页面顶部（电脑名旁边）也有同样的小字，鼠标悬停能看到提交时间，用来确认这台机器到底跑的是哪个版本。
 

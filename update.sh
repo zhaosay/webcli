@@ -16,6 +16,19 @@ if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -qE '^package(-lock)?\.
   npm install
 fi
 
-echo "[webcli] update complete. Restart the server to apply changes:"
-echo "  - workspace Launcher.command: 选 webcli -> [k]停止 -> [s]启动"
-echo "  - standalone: 重新跑 ./start.sh，或双击 start.command / start.bat"
+PID_FILE="../data/webcli/server.pid"
+if [ -f "$PID_FILE" ]; then
+  OLD_PID="$(cat "$PID_FILE")"
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "[webcli] stopping running instance (pid $OLD_PID)..."
+    kill "$OLD_PID" 2>/dev/null || true
+    for _ in $(seq 1 25); do
+      kill -0 "$OLD_PID" 2>/dev/null || break
+      sleep 0.2
+    done
+    kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null || true
+  fi
+fi
+
+echo "[webcli] update complete, restarting..."
+exec ./start.sh
