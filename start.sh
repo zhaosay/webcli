@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ ! -d node_modules ]; then
-  echo "[lan-terminal] node_modules not found, running npm install..."
+  echo "[webcli] node_modules not found, running npm install..."
   npm install
 fi
 
