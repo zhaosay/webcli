@@ -29,7 +29,7 @@
   }
 
   /* ---- token gate ---- */
-  #gate, #key-gate {
+  #gate, #key-gate, #device-gate {
     display: none;
     position: relative;
     flex-direction: column;
@@ -78,7 +78,7 @@
     margin-bottom: 20px;
   }
 
-  #gate input {
+  .gate-card input {
     width: 100%;
     font-family: var(--font-mono);
     font-size: 14px;
@@ -90,9 +90,9 @@
     color: var(--text);
     outline: none;
   }
-  #gate input:focus { border-color: var(--accent); }
+  .gate-card input:focus { border-color: var(--accent); }
 
-  #gate button {
+  .gate-card button {
     width: 100%;
     font-family: var(--font-sans);
     font-weight: 600;
@@ -105,7 +105,11 @@
     cursor: pointer;
     transition: background .15s ease;
   }
-  #gate button:hover { background: var(--accent-hover); }
+  .gate-card button:hover { background: var(--accent-hover); }
+  .gate-card .gate-actions { display: flex; gap: 8px; }
+  .gate-card .gate-actions button { flex: 1; }
+  .gate-card .gate-skip { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .gate-card .gate-skip:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
 
   /* ---- app chrome ---- */
   #app {
@@ -144,6 +148,55 @@
     opacity: .7;
   }
   @media (max-width: 700px) { #version-badge { display: none; } }
+
+  #connections-badge {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    padding: 3px 7px;
+    border-radius: .375rem;
+    cursor: pointer;
+  }
+  #connections-badge:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
+  #connections-badge .conn-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--border-glow);
+  }
+  #connections-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 10;
+    min-width: 220px;
+    max-width: 320px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    cursor: default;
+  }
+  #connections-dropdown.show { display: block; }
+  .conn-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 6px 8px;
+    border-radius: .375rem;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .conn-row:hover { background: rgba(255, 255, 255, .05); }
+  .conn-row .conn-device { color: var(--text); }
+  .conn-row .conn-meta { color: var(--muted); font-size: 10px; }
 
   .chrome-title-input {
     font-family: var(--font-mono);
@@ -394,10 +447,29 @@
     </div>
   </div>
 
+  <div id="device-gate">
+    <div class="gate-card">
+      <div class="gate-label">webcli</div>
+      <div class="gate-title">这台设备叫什么名字？<br>（方便对方知道是谁连上来了，可不填）</div>
+      <form id="device-gate-form">
+        <input id="device-input" type="text" maxlength="40" autocomplete="off" autofocus placeholder="比如：我的 iPhone">
+        <div class="gate-actions">
+          <button type="button" class="gate-skip" id="device-skip">跳过</button>
+          <button type="submit">确定</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="app">
     <div id="chrome">
       <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
       <span id="version-badge"></span>
+      <div id="connections-badge" title="点击查看当前连接">
+        <span class="conn-dot"></span>
+        <span id="conn-count">1</span>
+        <div id="connections-dropdown"></div>
+      </div>
       <div id="address">
         <span id="address-text"></span>
         <button id="copy-btn" type="button">Copy</button>
@@ -434,6 +506,7 @@
   <script>
     const params = new URLSearchParams(location.search);
     const token = params.get('token');
+    const DEVICE_NAME_STORAGE = 'webcli-device-name';
 
     if (!token) {
       document.getElementById('gate').style.display = 'flex';
@@ -446,7 +519,7 @@
         location.href = url.toString();
       });
     } else {
-      function startApp(secondaryKey) {
+      function initApp(secondaryKey) {
       document.getElementById('app').style.display = 'flex';
 
       const chromeTitle = document.getElementById('chrome-title');
@@ -461,6 +534,50 @@
         versionBadge.textContent = `v${version}${commit ? ' · ' + commit : ''}`;
         if (commitDate) versionBadge.title = commitDate;
       }).catch(() => {});
+
+      const connBadge = document.getElementById('connections-badge');
+      const connCount = document.getElementById('conn-count');
+      const connDropdown = document.getElementById('connections-dropdown');
+      const authQuery = `token=${encodeURIComponent(token)}${secondaryKey ? '&key=' + encodeURIComponent(secondaryKey) : ''}`;
+
+      function formatAgo(ts) {
+        const mins = Math.floor(Math.max(0, Date.now() - ts) / 60000);
+        if (mins < 1) return '刚刚';
+        if (mins < 60) return `${mins} 分钟前`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours} 小时前`;
+        return `${Math.floor(hours / 24)} 天前`;
+      }
+
+      function refreshConnections() {
+        fetch(`/api/connections?${authQuery}`).then((r) => r.json()).then(({ connections }) => {
+          if (!Array.isArray(connections)) return;
+          connCount.textContent = connections.length;
+          connDropdown.innerHTML = '';
+          connections.forEach((c) => {
+            const row = document.createElement('div');
+            row.className = 'conn-row';
+            const device = document.createElement('div');
+            device.className = 'conn-device';
+            device.textContent = c.device || '未命名设备';
+            const meta = document.createElement('div');
+            meta.className = 'conn-meta';
+            meta.textContent = `${c.ip || '未知 IP'} · ${formatAgo(c.connectedAt)}`;
+            row.appendChild(device);
+            row.appendChild(meta);
+            connDropdown.appendChild(row);
+          });
+        }).catch(() => {});
+      }
+      connBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willShow = !connDropdown.classList.contains('show');
+        connDropdown.classList.toggle('show', willShow);
+        if (willShow) refreshConnections();
+      });
+      document.addEventListener('click', () => connDropdown.classList.remove('show'));
+      refreshConnections();
+      setInterval(refreshConnections, 15000);
 
       chromeTitle.addEventListener('click', () => {
         const current = chromeTitle.textContent;
@@ -601,7 +718,9 @@
       function connectWs(session) {
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
         const keyParam = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
-        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(session.sid)}${keyParam}`);
+        const deviceName = localStorage.getItem(DEVICE_NAME_STORAGE) || '';
+        const deviceParam = deviceName ? `&device=${encodeURIComponent(deviceName)}` : '';
+        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(session.sid)}${keyParam}${deviceParam}`);
         session.ws = ws;
 
         const setDot = (state) => { session.dot.className = `tab-dot ${state}`; };
@@ -776,7 +895,26 @@
       });
 
       createSession();
-      } // end startApp
+      } // end initApp
+
+      function startApp(secondaryKey) {
+        if (localStorage.getItem(DEVICE_NAME_STORAGE) !== null) {
+          initApp(secondaryKey);
+          return;
+        }
+        const deviceGate = document.getElementById('device-gate');
+        deviceGate.style.display = 'flex';
+        const finish = (name) => {
+          localStorage.setItem(DEVICE_NAME_STORAGE, name);
+          deviceGate.style.display = 'none';
+          initApp(secondaryKey);
+        };
+        document.getElementById('device-gate-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          finish(document.getElementById('device-input').value.trim().slice(0, 40));
+        }, { once: true });
+        document.getElementById('device-skip').addEventListener('click', () => finish(''), { once: true });
+      }
 
       const SECONDARY_KEY_STORAGE = 'webcli-secondary-key';
       fetch('/api/auth-status').then((r) => r.json()).then(({ enabled }) => {
