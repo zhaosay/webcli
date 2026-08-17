@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd 模板：让 webcli 开机/登录后自动常驻启动。
+
+  使用步骤：
+  1. 把下面两处 <REPLACE_WITH_ABSOLUTE_PATH_TO_WEBCLI> 替换成这份代码在这台电脑上的绝对路径
+     （例如 /Users/yourname/webcli），把 <REPLACE_WITH_NODE_PATH> 替换成 `which node` 的输出
+  2. 复制到 ~/Library/LaunchAgents/com.webcli.server.plist
+  3. 加载：launchctl load ~/Library/LaunchAgents/com.webcli.server.plist
+  4. 卸载：launchctl unload ~/Library/LaunchAgents/com.webcli.server.plist
+  5. 日志在 <REPLACE_WITH_ABSOLUTE_PATH_TO_WEBCLI>/../data/webcli/*.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.webcli.server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string><REPLACE_WITH_NODE_PATH></string>
+    <string><REPLACE_WITH_ABSOLUTE_PATH_TO_WEBCLI>/server.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string><REPLACE_WITH_ABSOLUTE_PATH_TO_WEBCLI></string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string><REPLACE_WITH_ABSOLUTE_PATH_TO_WEBCLI>/../data/webcli/stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string><REPLACE_WITH_ABSOLUTE_PATH_TO_WEBCLI>/../data/webcli/stderr.log</string>
+</dict>
+</plist>

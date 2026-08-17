@@ -283,6 +283,72 @@
     font-size: 13px;
   }
   #empty-state.show { display: flex; }
+
+  /* ---- search overlay ---- */
+  #search-bar {
+    display: none;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  }
+  #search-bar.show { display: flex; }
+  #search-bar input {
+    width: 160px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 4px 6px;
+    border-radius: .375rem;
+    border: 1px solid var(--border);
+    background: #0f0f11;
+    color: var(--text);
+    outline: none;
+  }
+  #search-bar input:focus { border-color: var(--accent); }
+  #search-bar button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 6px;
+    border-radius: .25rem;
+  }
+  #search-bar button:hover { color: var(--accent-hover); background: rgba(45, 212, 191, .1); }
+
+  /* ---- mobile key row ---- */
+  #mobile-keys {
+    display: none;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  #mobile-keys button {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: .375rem;
+    border: 1px solid var(--border);
+    background: #0f0f11;
+    color: var(--text);
+    cursor: pointer;
+  }
+  #mobile-keys button:active { background: rgba(45, 212, 191, .15); border-color: var(--accent); }
+
+  @media (max-width: 700px) {
+    #mobile-keys { display: flex; }
+  }
 </style>
 </head>
 <body>
@@ -320,13 +386,30 @@
       <div id="tabs"></div>
       <button id="new-tab-btn" type="button" title="New terminal">+</button>
     </div>
+    <div id="mobile-keys">
+      <button type="button" data-key="esc">Esc</button>
+      <button type="button" data-key="tab">Tab</button>
+      <button type="button" data-key="ctrl-c">^C</button>
+      <button type="button" data-key="ctrl-d">^D</button>
+      <button type="button" data-key="up">&uarr;</button>
+      <button type="button" data-key="down">&darr;</button>
+      <button type="button" data-key="left">&larr;</button>
+      <button type="button" data-key="right">&rarr;</button>
+    </div>
     <div id="panes">
       <div id="empty-state">No terminal open — click + to start one</div>
+      <div id="search-bar">
+        <input id="search-input" type="text" placeholder="Find in terminal…" autocomplete="off">
+        <button id="search-prev" type="button" title="Previous match">&uarr;</button>
+        <button id="search-next" type="button" title="Next match">&darr;</button>
+        <button id="search-close" type="button" title="Close">&times;</button>
+      </div>
     </div>
   </div>
 
   <script src="/vendor/xterm.js"></script>
   <script src="/vendor/addon-fit.js"></script>
+  <script src="/vendor/addon-search.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const token = params.get('token');
@@ -433,9 +516,93 @@
       }
 
       function sendResize(session) {
-        if (session.ws.readyState === WebSocket.OPEN) {
+        if (session.ws && session.ws.readyState === WebSocket.OPEN) {
           session.ws.send(JSON.stringify({ type: 'resize', cols: session.term.cols, rows: session.term.rows }));
         }
+      }
+
+      function currentSession() {
+        return sessions.get(activeId);
+      }
+
+      const searchBar = document.getElementById('search-bar');
+      const searchInput = document.getElementById('search-input');
+
+      function openSearch() {
+        if (!currentSession()) return;
+        searchBar.classList.add('show');
+        searchInput.focus();
+        searchInput.select();
+      }
+      function closeSearch() {
+        searchBar.classList.remove('show');
+        const session = currentSession();
+        if (session) session.term.focus();
+      }
+      function runSearch(dir) {
+        const session = currentSession();
+        if (!session || !searchInput.value) return;
+        if (dir === 'prev') session.searchAddon.findPrevious(searchInput.value);
+        else session.searchAddon.findNext(searchInput.value);
+      }
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); runSearch(e.shiftKey ? 'prev' : 'next'); }
+        if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
+      });
+      document.getElementById('search-next').addEventListener('click', () => runSearch('next'));
+      document.getElementById('search-prev').addEventListener('click', () => runSearch('prev'));
+      document.getElementById('search-close').addEventListener('click', closeSearch);
+
+      const MOBILE_KEY_SEQ = {
+        esc: '\x1b', tab: '\t', 'ctrl-c': '\x03', 'ctrl-d': '\x04',
+        up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C',
+      };
+      document.getElementById('mobile-keys').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-key]');
+        if (!btn) return;
+        const session = currentSession();
+        if (!session || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
+        session.ws.send(JSON.stringify({ type: 'input', data: MOBILE_KEY_SEQ[btn.dataset.key] }));
+        session.term.focus();
+      });
+
+      function newSid() {
+        if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+
+      function connectWs(session) {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const keyParam = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
+        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(session.sid)}${keyParam}`);
+        session.ws = ws;
+
+        const setDot = (state) => { session.dot.className = `tab-dot ${state}`; };
+
+        ws.onopen = () => {
+          setDot('connected');
+          const wasReconnect = session.reconnectAttempts > 0;
+          session.reconnectAttempts = 0;
+          if (wasReconnect) session.term.write('\r\n\x1b[2m[reconnected]\x1b[0m\r\n');
+          if (activeId === session.id) {
+            session.fitAddon.fit();
+            sendResize(session);
+          }
+        };
+        ws.onmessage = (e) => session.term.write(e.data);
+        ws.onclose = () => {
+          setDot('disconnected');
+          if (session.closing) return;
+          session.term.write('\r\n\x1b[31m[connection lost, reconnecting…]\x1b[0m\r\n');
+          const delay = Math.min(1000 * 2 ** session.reconnectAttempts, 10000);
+          session.reconnectAttempts += 1;
+          session.reconnectTimer = setTimeout(() => {
+            if (!session.closing) connectWs(session);
+          }, delay);
+        };
+        ws.onerror = () => {
+          setDot('disconnected');
+        };
       }
 
       function activateSession(id) {
@@ -453,7 +620,9 @@
       function closeSession(id) {
         const session = sessions.get(id);
         if (!session) return;
-        session.ws.close();
+        session.closing = true;
+        if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+        if (session.ws) session.ws.close();
         session.pane.remove();
         session.tabEl.remove();
         sessions.delete(id);
@@ -494,40 +663,41 @@
           },
         });
         const fitAddon = new FitAddon.FitAddon();
+        const searchAddon = new SearchAddon.SearchAddon();
         term.loadAddon(fitAddon);
+        term.loadAddon(searchAddon);
         term.open(pane);
 
-        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-        const keyParam = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
-        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}${keyParam}`);
+        term.attachCustomKeyEventHandler((e) => {
+          if (e.type !== 'keydown') return true;
+          const mod = e.ctrlKey || e.metaKey;
+          if (mod && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            activateSession(id);
+            openSearch();
+            return false;
+          }
+          if (e.key === 'Escape' && searchBar.classList.contains('show')) {
+            e.preventDefault();
+            closeSearch();
+            return false;
+          }
+          return true;
+        });
 
-        const session = { id, term, fitAddon, ws, pane, tabEl, dot: tabEl.querySelector('.tab-dot') };
+        const session = {
+          id, sid: newSid(), term, fitAddon, searchAddon, ws: null, pane, tabEl,
+          dot: tabEl.querySelector('.tab-dot'), closing: false, reconnectAttempts: 0, reconnectTimer: null,
+        };
         sessions.set(id, session);
         updateEmptyState();
         updateNewTabBtn();
 
-        const setDot = (state) => { session.dot.className = `tab-dot ${state}`; };
-
-        ws.onopen = () => {
-          setDot('connected');
-          if (activeId === id) {
-            fitAddon.fit();
-            sendResize(session);
-          }
-        };
-        ws.onmessage = (e) => term.write(e.data);
-        ws.onclose = () => {
-          setDot('disconnected');
-          term.write('\r\n\x1b[31m[connection closed]\x1b[0m\r\n');
-        };
-        ws.onerror = () => {
-          setDot('disconnected');
-          term.write('\r\n\x1b[31m[connection error]\x1b[0m\r\n');
-        };
+        connectWs(session);
 
         term.onData((data) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'input', data }));
+          if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(JSON.stringify({ type: 'input', data }));
           }
         });
 

@@ -7,6 +7,8 @@
 - 鉴权：单一共享 token，放在访问链接里，同局域网内没有 token 连不上；可选再加一道独立的二次验证密钥（见下）
 - 页面内自带 tab 栏，一个浏览器窗口就能开多个终端（点 `+` 新建、点 `×` 关闭），每个 tab 对应一个独立的 shell 进程，互不共享
 - 页面顶部的名字（默认是电脑的 hostname）点一下就能改，方便同时开着好几台电脑的页面时分清楚哪个 tab 是哪台机器
+- 网络短暂中断（wifi 抖动、笔记本合盖、手机锁屏）会自动重连，30 秒内恢复的话正在跑的命令不会丢（可用 `RECONNECT_GRACE_MS` 环境变量调整这个宽限期）；超过宽限期或手动关闭 tab 才会真正结束该终端
+- 终端里按 `Ctrl/Cmd+F` 能搜索当前回滚内容；窄屏（手机）下会出现一排 Esc / Tab / Ctrl+C / Ctrl+D / 方向键按钮，方便触屏输入
 
 ## 安装（被控端：这台电脑要被远程操作）
 
@@ -73,6 +75,20 @@
 ```
 
 开关**立即生效，不需要重启服务**（不会打断正在跑的终端）。开启后浏览器打开链接会多弹一个"输入二次验证密钥"的框，输入一次后这个浏览器标签页会记住（`sessionStorage`，关闭标签页就清掉），不用每个新 tab 都重复输入。密钥请单独发给需要连接的人，不要和访问链接放在一起分享。
+
+## 开机自启（可选）
+
+**macOS**：用 `contrib/com.webcli.server.plist` 模板——按文件里的注释把两处路径占位符替换成实际路径，放到 `~/Library/LaunchAgents/`，然后：
+```bash
+launchctl load ~/Library/LaunchAgents/com.webcli.server.plist    # 启用
+launchctl unload ~/Library/LaunchAgents/com.webcli.server.plist  # 禁用
+```
+
+**Windows**：用系统自带的任务计划，登录时自动跑 `start.bat`（把路径换成实际项目路径）：
+```cmd
+schtasks /create /tn "webcli" /tr "C:\path\to\webcli\start.bat" /sc onlogon
+schtasks /delete /tn "webcli" /f   REM 取消
+```
 
 ## 安全说明（请务必了解）
 
