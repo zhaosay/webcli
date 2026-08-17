@@ -46,7 +46,9 @@
 ./update.sh
 ```
 
-自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动），`package.json`/`package-lock.json` 有变化会顺便 `npm install`。**更新完要手动重启服务**（重新跑一次 `start.sh` 或双击 `start.command`/`start.bat`）才会生效。
+自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动；`package-lock.json` 是各机器 `npm install` 自动生成的文件，脚本会先丢弃它的本地改动再拉取，不会因为这个卡住），`package.json`/`package-lock.json` 有变化会顺便 `npm install`。**更新完要手动重启服务**（重新跑一次 `start.sh` 或双击 `start.command`/`start.bat`）才会生效。
+
+多台电脑各自更新，版本容易不一致——启动时终端会打印 `[webcli] version: v0.2.0 (b531cb2)`，页面顶部（电脑名旁边）也有同样的小字，鼠标悬停能看到提交时间，用来确认这台机器到底跑的是哪个版本。
 
 ## 打开（客户端：在别的设备上访问）
 

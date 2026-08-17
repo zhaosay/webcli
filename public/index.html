@@ -137,6 +137,14 @@
   }
   .chrome-title:hover { color: var(--accent-hover); background: rgba(45, 212, 191, .1); }
 
+  #version-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    opacity: .7;
+  }
+  @media (max-width: 700px) { #version-badge { display: none; } }
+
   .chrome-title-input {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -219,6 +227,18 @@
     left: 0; right: 0; bottom: -1px;
     height: 2px;
     background: var(--accent);
+  }
+
+  .tab-label-input {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    background: #0f0f11;
+    border: 1px solid var(--accent);
+    border-radius: .25rem;
+    padding: 1px 3px;
+    outline: none;
+    width: 100px;
   }
 
   .tab-dot {
@@ -377,6 +397,7 @@
   <div id="app">
     <div id="chrome">
       <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
+      <span id="version-badge"></span>
       <div id="address">
         <span id="address-text"></span>
         <button id="copy-btn" type="button">Copy</button>
@@ -434,6 +455,12 @@
         chromeTitle.textContent = name;
       };
       fetch('/api/name').then((r) => r.json()).then(({ name }) => { if (name) applyName(name); }).catch(() => {});
+
+      const versionBadge = document.getElementById('version-badge');
+      fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate }) => {
+        versionBadge.textContent = `v${version}${commit ? ' · ' + commit : ''}`;
+        if (commitDate) versionBadge.title = commitDate;
+      }).catch(() => {});
 
       chromeTitle.addEventListener('click', () => {
         const current = chromeTitle.textContent;
@@ -648,7 +675,32 @@
         tabEl.className = 'tab';
         tabEl.dataset.id = String(id);
         tabEl.innerHTML = '<span class="tab-dot"></span><span class="tab-label"></span><button class="tab-close" type="button">&times;</button>';
-        tabEl.querySelector('.tab-label').textContent = id;
+        const tabLabelEl = tabEl.querySelector('.tab-label');
+        tabLabelEl.textContent = `webcli-${id}`;
+        tabLabelEl.title = '双击重命名';
+        tabLabelEl.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          const current = tabLabelEl.textContent;
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = current;
+          input.maxLength = 40;
+          input.className = 'tab-label-input';
+          tabLabelEl.replaceWith(input);
+          input.focus();
+          input.select();
+          input.addEventListener('click', (ev) => ev.stopPropagation());
+          const commit = () => {
+            const value = input.value.trim();
+            input.replaceWith(tabLabelEl);
+            tabLabelEl.textContent = value || current;
+          };
+          input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') input.blur();
+            if (ev.key === 'Escape') { input.value = current; input.blur(); }
+          });
+          input.addEventListener('blur', commit, { once: true });
+        });
         tabsEl.appendChild(tabEl);
 
         const term = new Terminal({

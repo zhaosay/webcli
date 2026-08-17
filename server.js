@@ -5,6 +5,7 @@ const { PORT } = require('./lib/config');
 const { TOKEN } = require('./lib/auth');
 const { createRequestHandler } = require('./lib/routes');
 const { handleUpgrade, shutdownAll } = require('./lib/pty-sessions');
+const { VERSION_INFO } = require('./lib/version');
 
 const server = http.createServer(createRequestHandler());
 const wss = new WebSocket.Server({ noServer: true });
@@ -23,6 +24,8 @@ process.on('SIGINT', shutdown);
 server.listen(PORT, '0.0.0.0', () => {
   const hostname = os.hostname();
   const mdnsHost = hostname.endsWith('.local') ? hostname : `${hostname}.local`;
+  const commitLabel = VERSION_INFO.commit ? ` (${VERSION_INFO.commit})` : '';
+  console.log(`[webcli] version: v${VERSION_INFO.version}${commitLabel}`);
   console.log(`[webcli] listening on 0.0.0.0:${PORT}`);
   console.log(`[webcli] open: http://${mdnsHost}:${PORT}/?token=${TOKEN}`);
   const nets = os.networkInterfaces();
