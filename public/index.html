@@ -251,19 +251,94 @@
   .conn-row .conn-device { color: var(--text); }
   .conn-row .conn-meta { color: var(--muted); font-size: 10px; }
 
-  #settings-btn {
+  #settings-btn, #quickcmd-btn {
     font-family: var(--font-sans);
-    font-size: 15px;
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1;
     color: var(--muted);
     background: transparent;
     border: 1px solid var(--border);
     border-radius: .375rem;
-    padding: 4px 9px;
+    padding: 5px 9px;
     cursor: pointer;
     transition: background .15s ease, color .15s ease;
   }
-  #settings-btn:hover { background: rgba(127, 127, 127, .1); color: var(--text); }
+  #settings-btn { font-size: 15px; font-weight: 400; }
+  #settings-btn:hover, #quickcmd-btn:hover { background: rgba(127, 127, 127, .1); color: var(--text); }
+
+  #quickcmd-list { max-height: 220px; overflow-y: auto; }
+  .quickcmd-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: .375rem;
+    cursor: pointer;
+  }
+  .quickcmd-row:hover { background: rgba(127, 127, 127, .1); }
+  .quickcmd-row .quickcmd-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .quickcmd-row .quickcmd-command {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .quickcmd-row .quickcmd-del {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: .25rem;
+  }
+  .quickcmd-row .quickcmd-del:hover { color: var(--text); background: rgba(127, 127, 127, .15); }
+  .quickcmd-empty {
+    padding: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #quickcmd-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+  }
+  #quickcmd-form input {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: .375rem;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
+    outline: none;
+  }
+  #quickcmd-form input:focus { border-color: var(--accent); }
+  #quickcmd-form button {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px;
+    border-radius: .375rem;
+    border: none;
+    background: var(--accent);
+    color: #04201c;
+    cursor: pointer;
+  }
+  #quickcmd-form button:hover { background: var(--accent-hover); }
 
   #settings-dropdown .settings-label {
     font-family: var(--font-mono);
@@ -579,6 +654,18 @@
         <span id="conn-count">1</span>
         <div id="connections-dropdown" class="chrome-dropdown"></div>
       </div>
+      <div id="quickcmd-badge" class="chrome-dropdown-anchor">
+        <button id="quickcmd-btn" type="button" title="快捷命令">命令</button>
+        <div id="quickcmd-dropdown" class="chrome-dropdown">
+          <div id="quickcmd-list"></div>
+          <div class="settings-divider"></div>
+          <form id="quickcmd-form">
+            <input id="quickcmd-label-input" type="text" placeholder="名称" maxlength="20" autocomplete="off">
+            <input id="quickcmd-command-input" type="text" placeholder="命令内容" maxlength="200" autocomplete="off">
+            <button type="submit">添加</button>
+          </form>
+        </div>
+      </div>
       <div id="settings-badge" class="chrome-dropdown-anchor">
         <button id="settings-btn" type="button" title="设置">&#8943;</button>
         <div id="settings-dropdown" class="chrome-dropdown">
@@ -592,7 +679,7 @@
           <div id="version-info"></div>
         </div>
       </div>
-      <button id="copy-link-btn" type="button">&#128279; 复制链接</button>
+      <button id="copy-link-btn" type="button">复制链接</button>
     </div>
     <div id="tabbar">
       <div id="tabs"></div>
@@ -663,11 +750,14 @@
       const connDropdown = document.getElementById('connections-dropdown');
       const settingsBtn = document.getElementById('settings-btn');
       const settingsDropdown = document.getElementById('settings-dropdown');
+      const quickcmdBtn = document.getElementById('quickcmd-btn');
+      const quickcmdDropdown = document.getElementById('quickcmd-dropdown');
       const authQuery = `token=${encodeURIComponent(token)}${secondaryKey ? '&key=' + encodeURIComponent(secondaryKey) : ''}`;
 
       function closeAllDropdowns() {
         connDropdown.classList.remove('show');
         settingsDropdown.classList.remove('show');
+        quickcmdDropdown.classList.remove('show');
       }
 
       function formatAgo(ts) {
@@ -712,9 +802,88 @@
         closeAllDropdowns();
         settingsDropdown.classList.toggle('show', willShow);
       });
+      quickcmdBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willShow = !quickcmdDropdown.classList.contains('show');
+        closeAllDropdowns();
+        quickcmdDropdown.classList.toggle('show', willShow);
+      });
+      quickcmdDropdown.addEventListener('click', (e) => e.stopPropagation());
       document.addEventListener('click', closeAllDropdowns);
       refreshConnections();
       setInterval(refreshConnections, 15000);
+
+      const QUICKCMD_STORAGE = 'webcli-quick-commands';
+      const quickcmdList = document.getElementById('quickcmd-list');
+      const quickcmdForm = document.getElementById('quickcmd-form');
+      const quickcmdLabelInput = document.getElementById('quickcmd-label-input');
+      const quickcmdCommandInput = document.getElementById('quickcmd-command-input');
+
+      function loadQuickCommands() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(QUICKCMD_STORAGE) || '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      function saveQuickCommands(list) {
+        localStorage.setItem(QUICKCMD_STORAGE, JSON.stringify(list));
+      }
+      function runQuickCommand(command) {
+        const session = currentSession();
+        if (!session || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
+        session.ws.send(JSON.stringify({ type: 'input', data: command + '\n' }));
+        session.term.focus();
+      }
+      function renderQuickCommands() {
+        const list = loadQuickCommands();
+        quickcmdList.innerHTML = '';
+        if (!list.length) {
+          const empty = document.createElement('div');
+          empty.className = 'quickcmd-empty';
+          empty.textContent = '还没有快捷命令，在下面添加一个';
+          quickcmdList.appendChild(empty);
+          return;
+        }
+        list.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'quickcmd-row';
+          row.title = item.command;
+          const label = document.createElement('span');
+          label.className = 'quickcmd-label';
+          label.textContent = item.label;
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'quickcmd-del';
+          del.textContent = '×';
+          del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            saveQuickCommands(loadQuickCommands().filter((c) => c.id !== item.id));
+            renderQuickCommands();
+          });
+          row.appendChild(label);
+          row.appendChild(del);
+          row.addEventListener('click', () => {
+            runQuickCommand(item.command);
+            closeAllDropdowns();
+          });
+          quickcmdList.appendChild(row);
+        });
+      }
+      quickcmdForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const label = quickcmdLabelInput.value.trim();
+        const command = quickcmdCommandInput.value.trim();
+        if (!label || !command) return;
+        const list = loadQuickCommands();
+        list.push({ id: newSid(), label, command });
+        saveQuickCommands(list);
+        quickcmdLabelInput.value = '';
+        quickcmdCommandInput.value = '';
+        renderQuickCommands();
+      });
+      renderQuickCommands();
 
       const THEME_STORAGE = 'webcli-theme';
       const themeButtons = document.querySelectorAll('.theme-switch button');
@@ -767,8 +936,8 @@
       });
 
       const copyLinkBtn = document.getElementById('copy-link-btn');
-      const copyLinkLabel = '&#128279; 复制链接';
-      const copyLinkCopiedLabel = '&#10003; 已复制';
+      const copyLinkLabel = '复制链接';
+      const copyLinkCopiedLabel = '已复制';
       copyLinkBtn.title = location.href;
       copyLinkBtn.addEventListener('click', async () => {
         try {
