@@ -12,10 +12,37 @@
     --border-glow: rgba(45, 212, 191, .35);
     --text: #fafafa;
     --muted: #a1a1aa;
+    --input-bg: #0f0f11;
     --accent: #14b8a6;
     --accent-hover: #2dd4bf;
     --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f4f4f5;
+    --panel: #ffffff;
+    --border: #e4e4e7;
+    --border-glow: rgba(13, 148, 136, .25);
+    --text: #18181b;
+    --muted: #71717a;
+    --input-bg: #ffffff;
+    --accent: #0d9488;
+    --accent-hover: #0f766e;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]):not([data-theme="light"]) {
+      --bg: #f4f4f5;
+      --panel: #ffffff;
+      --border: #e4e4e7;
+      --border-glow: rgba(13, 148, 136, .25);
+      --text: #18181b;
+      --muted: #71717a;
+      --input-bg: #ffffff;
+      --accent: #0d9488;
+      --accent-hover: #0f766e;
+    }
   }
 
   * { box-sizing: border-box; }
@@ -26,6 +53,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
+    transition: background .15s ease, color .15s ease;
   }
 
   /* ---- token gate ---- */
@@ -61,6 +89,12 @@
     border-radius: .75rem;
     box-shadow: 0 0 0 1px var(--border-glow), 0 20px 60px rgba(0, 0, 0, .5);
     text-align: center;
+    animation: gate-in .35s ease;
+  }
+
+  @keyframes gate-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .gate-label {
@@ -86,7 +120,7 @@
     margin-bottom: 14px;
     border-radius: .5rem;
     border: 1px solid var(--border);
-    background: #0f0f11;
+    background: var(--input-bg);
     color: var(--text);
     outline: none;
   }
@@ -141,16 +175,51 @@
   }
   .chrome-title:hover { color: var(--accent-hover); background: rgba(45, 212, 191, .1); }
 
-  #version-badge {
+  .chrome-title-input {
     font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--muted);
-    opacity: .7;
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: var(--input-bg);
+    border: 1px solid var(--accent);
+    border-radius: .25rem;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    outline: none;
+    width: 160px;
   }
-  @media (max-width: 700px) { #version-badge { display: none; } }
+
+  /* ---- dropdown panels shared look (connections / settings) ---- */
+  .chrome-dropdown-anchor { position: relative; }
+  .chrome-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 10;
+    min-width: 220px;
+    max-width: 320px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    cursor: default;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(.96) translateY(-4px);
+    transform-origin: top right;
+    transition: opacity .12s ease, transform .12s ease, visibility 0s linear .12s;
+  }
+  .chrome-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1) translateY(0);
+    transition: opacity .12s ease, transform .12s ease, visibility 0s linear 0s;
+  }
 
   #connections-badge {
-    position: relative;
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -161,7 +230,7 @@
     border-radius: .375rem;
     cursor: pointer;
   }
-  #connections-badge:hover { background: rgba(255, 255, 255, .06); color: var(--text); }
+  #connections-badge:hover { background: rgba(127, 127, 127, .1); color: var(--text); }
   #connections-badge .conn-dot {
     width: 6px;
     height: 6px;
@@ -169,22 +238,6 @@
     background: var(--accent);
     box-shadow: 0 0 6px var(--border-glow);
   }
-  #connections-dropdown {
-    display: none;
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    z-index: 10;
-    min-width: 220px;
-    max-width: 320px;
-    padding: 6px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: .5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
-    cursor: default;
-  }
-  #connections-dropdown.show { display: block; }
   .conn-row {
     display: flex;
     flex-direction: column;
@@ -194,45 +247,67 @@
     font-family: var(--font-mono);
     font-size: 11px;
   }
-  .conn-row:hover { background: rgba(255, 255, 255, .05); }
+  .conn-row:hover { background: rgba(127, 127, 127, .1); }
   .conn-row .conn-device { color: var(--text); }
   .conn-row .conn-meta { color: var(--muted); font-size: 10px; }
 
-  .chrome-title-input {
+  #settings-btn {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: .375rem;
+    padding: 4px 9px;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  #settings-btn:hover { background: rgba(127, 127, 127, .1); color: var(--text); }
+
+  #settings-dropdown .settings-label {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 10px;
     letter-spacing: .08em;
     text-transform: uppercase;
-    color: var(--text);
-    background: #0f0f11;
-    border: 1px solid var(--accent);
-    border-radius: .25rem;
-    padding: 2px 4px;
-    margin: -2px -4px;
-    outline: none;
-    width: 160px;
+    color: var(--muted);
+    padding: 2px 4px 6px;
+  }
+  .theme-switch {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: .375rem;
+  }
+  .theme-switch button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 5px 4px;
+    border-radius: .3rem;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button.active { background: var(--accent); color: #04201c; }
+  .settings-divider { height: 1px; background: var(--border); margin: 8px 2px; }
+  #version-info {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 0 4px;
   }
 
-  #address {
+  #copy-link-btn {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-left: auto;
-    min-width: 0;
-  }
-
-  #address-text {
-    max-width: 46vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text);
-  }
-
-  #copy-btn {
-    flex-shrink: 0;
+    gap: 5px;
     font-family: var(--font-sans);
     font-size: 11px;
     font-weight: 600;
@@ -244,8 +319,8 @@
     cursor: pointer;
     transition: background .15s ease, border-color .15s ease;
   }
-  #copy-btn:hover { background: rgba(45, 212, 191, .12); border-color: var(--accent); }
-  #copy-btn.copied { color: var(--accent); border-color: var(--accent); }
+  #copy-link-btn:hover { background: rgba(45, 212, 191, .12); border-color: var(--accent); }
+  #copy-link-btn.copied { color: var(--accent); border-color: var(--accent); }
 
   /* ---- tab bar ---- */
   #tabbar {
@@ -286,7 +361,7 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text);
-    background: #0f0f11;
+    background: var(--input-bg);
     border: 1px solid var(--accent);
     border-radius: .25rem;
     padding: 1px 3px;
@@ -302,7 +377,12 @@
     flex-shrink: 0;
   }
   .tab-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--border-glow); }
-  .tab-dot.disconnected { background: #ef4444; }
+  .tab-dot.disconnected { background: #f59e0b; animation: dot-pulse 1.2s ease-in-out infinite; }
+
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
+  }
 
   .tab-close {
     border: none;
@@ -341,21 +421,45 @@
     position: absolute;
     inset: 0;
     padding: 8px 10px;
-    display: none;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .15s ease, visibility 0s linear .15s;
   }
-  .pane.active { display: block; }
+  .pane.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity .15s ease, visibility 0s linear 0s;
+  }
 
   #empty-state {
     display: none;
     position: absolute;
     inset: 0;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+    text-align: center;
     color: var(--muted);
-    font-family: var(--font-mono);
-    font-size: 13px;
   }
   #empty-state.show { display: flex; }
+  #empty-state .empty-icon {
+    font-family: var(--font-mono);
+    font-size: 30px;
+    color: var(--border);
+    margin-bottom: 2px;
+  }
+  #empty-state .empty-title {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text);
+  }
+  #empty-state .empty-hint {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
 
   /* ---- search overlay ---- */
   #search-bar {
@@ -380,7 +484,7 @@
     padding: 4px 6px;
     border-radius: .375rem;
     border: 1px solid var(--border);
-    background: #0f0f11;
+    background: var(--input-bg);
     color: var(--text);
     outline: none;
   }
@@ -413,7 +517,7 @@
     padding: 6px 12px;
     border-radius: .375rem;
     border: 1px solid var(--border);
-    background: #0f0f11;
+    background: var(--input-bg);
     color: var(--text);
     cursor: pointer;
   }
@@ -423,6 +527,12 @@
     #mobile-keys { display: flex; }
   }
 </style>
+<script>
+  (function () {
+    var t = localStorage.getItem('webcli-theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 </head>
 <body>
   <div id="gate">
@@ -464,16 +574,25 @@
   <div id="app">
     <div id="chrome">
       <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
-      <span id="version-badge"></span>
-      <div id="connections-badge" title="点击查看当前连接">
+      <div id="connections-badge" class="chrome-dropdown-anchor" title="点击查看当前连接">
         <span class="conn-dot"></span>
         <span id="conn-count">1</span>
-        <div id="connections-dropdown"></div>
+        <div id="connections-dropdown" class="chrome-dropdown"></div>
       </div>
-      <div id="address">
-        <span id="address-text"></span>
-        <button id="copy-btn" type="button">Copy</button>
+      <div id="settings-badge" class="chrome-dropdown-anchor">
+        <button id="settings-btn" type="button" title="设置">&#8943;</button>
+        <div id="settings-dropdown" class="chrome-dropdown">
+          <div class="settings-label">主题</div>
+          <div class="theme-switch">
+            <button type="button" data-theme-choice="auto">跟随系统</button>
+            <button type="button" data-theme-choice="light">浅色</button>
+            <button type="button" data-theme-choice="dark">深色</button>
+          </div>
+          <div class="settings-divider"></div>
+          <div id="version-info"></div>
+        </div>
       </div>
+      <button id="copy-link-btn" type="button">&#128279; 复制链接</button>
     </div>
     <div id="tabbar">
       <div id="tabs"></div>
@@ -490,7 +609,11 @@
       <button type="button" data-key="right">&rarr;</button>
     </div>
     <div id="panes">
-      <div id="empty-state">No terminal open — click + to start one</div>
+      <div id="empty-state">
+        <div class="empty-icon">&gt;_</div>
+        <div class="empty-title">还没有打开的终端</div>
+        <div class="empty-hint">点击左上角 <strong>+</strong> 开一个</div>
+      </div>
       <div id="search-bar">
         <input id="search-input" type="text" placeholder="Find in terminal…" autocomplete="off">
         <button id="search-prev" type="button" title="Previous match">&uarr;</button>
@@ -529,16 +652,23 @@
       };
       fetch('/api/name').then((r) => r.json()).then(({ name }) => { if (name) applyName(name); }).catch(() => {});
 
-      const versionBadge = document.getElementById('version-badge');
+      const versionInfo = document.getElementById('version-info');
       fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate }) => {
-        versionBadge.textContent = `v${version}${commit ? ' · ' + commit : ''}`;
-        if (commitDate) versionBadge.title = commitDate;
+        versionInfo.textContent = `v${version}${commit ? ' · ' + commit : ''}`;
+        if (commitDate) versionInfo.title = commitDate;
       }).catch(() => {});
 
       const connBadge = document.getElementById('connections-badge');
       const connCount = document.getElementById('conn-count');
       const connDropdown = document.getElementById('connections-dropdown');
+      const settingsBtn = document.getElementById('settings-btn');
+      const settingsDropdown = document.getElementById('settings-dropdown');
       const authQuery = `token=${encodeURIComponent(token)}${secondaryKey ? '&key=' + encodeURIComponent(secondaryKey) : ''}`;
+
+      function closeAllDropdowns() {
+        connDropdown.classList.remove('show');
+        settingsDropdown.classList.remove('show');
+      }
 
       function formatAgo(ts) {
         const mins = Math.floor(Math.max(0, Date.now() - ts) / 60000);
@@ -572,12 +702,32 @@
       connBadge.addEventListener('click', (e) => {
         e.stopPropagation();
         const willShow = !connDropdown.classList.contains('show');
+        closeAllDropdowns();
         connDropdown.classList.toggle('show', willShow);
         if (willShow) refreshConnections();
       });
-      document.addEventListener('click', () => connDropdown.classList.remove('show'));
+      settingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willShow = !settingsDropdown.classList.contains('show');
+        closeAllDropdowns();
+        settingsDropdown.classList.toggle('show', willShow);
+      });
+      document.addEventListener('click', closeAllDropdowns);
       refreshConnections();
       setInterval(refreshConnections, 15000);
+
+      const THEME_STORAGE = 'webcli-theme';
+      const themeButtons = document.querySelectorAll('.theme-switch button');
+      function applyTheme(choice) {
+        if (choice === 'auto') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', choice);
+        themeButtons.forEach((b) => b.classList.toggle('active', b.dataset.themeChoice === choice));
+      }
+      themeButtons.forEach((b) => b.addEventListener('click', () => {
+        localStorage.setItem(THEME_STORAGE, b.dataset.themeChoice);
+        applyTheme(b.dataset.themeChoice);
+      }));
+      applyTheme(localStorage.getItem(THEME_STORAGE) || 'auto');
 
       chromeTitle.addEventListener('click', () => {
         const current = chromeTitle.textContent;
@@ -616,11 +766,11 @@
         input.addEventListener('blur', commit, { once: true });
       });
 
-      const addressText = document.getElementById('address-text');
-      const copyBtn = document.getElementById('copy-btn');
-      addressText.textContent = location.href;
-      addressText.title = location.href;
-      copyBtn.addEventListener('click', async () => {
+      const copyLinkBtn = document.getElementById('copy-link-btn');
+      const copyLinkLabel = '&#128279; 复制链接';
+      const copyLinkCopiedLabel = '&#10003; 已复制';
+      copyLinkBtn.title = location.href;
+      copyLinkBtn.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(location.href);
         } catch {
@@ -633,11 +783,11 @@
           document.execCommand('copy');
           document.body.removeChild(ta);
         }
-        copyBtn.textContent = 'Copied';
-        copyBtn.classList.add('copied');
+        copyLinkBtn.innerHTML = copyLinkCopiedLabel;
+        copyLinkBtn.classList.add('copied');
         setTimeout(() => {
-          copyBtn.textContent = 'Copy';
-          copyBtn.classList.remove('copied');
+          copyLinkBtn.innerHTML = copyLinkLabel;
+          copyLinkBtn.classList.remove('copied');
         }, 1500);
       });
 
