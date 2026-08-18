@@ -1,145 +1,56 @@
 # webcli
 
-局域网网页终端：在浏览器里打开一个网页，就能看到并操作这台电脑上一个**完整、可交互**的终端（支持 vim / top / ssh 等全屏程序，跟本地开一个真终端窗口体验一致）。适合"在另一台电脑/手机上，临时操作一下这台机器"的场景。
+局域网网页终端：浏览器打开一个网页，就能看到并操作这台电脑上一个**完整、可交互**的终端（`vim`/`top`/`ssh` 等全屏程序都能正常用，跟本地开一个真终端窗口体验一致）。适合"在另一台电脑或手机上，临时操作一下这台机器"的场景。
 
-- 后端：Node.js + [`node-pty`](https://github.com/microsoft/node-pty)（起真实 shell 进程）+ [`ws`](https://github.com/websockets/ws)（WebSocket）
-- 前端：[`xterm.js`](https://xtermjs.org/)，无需安装，浏览器直接打开即可
-- 鉴权：单一共享 token，放在访问链接里，同局域网内没有 token 连不上；可选再加一道独立的二次验证密钥（见下）
-- 页面内自带 tab 栏，一个浏览器窗口就能开多个终端（点 `+` 新建、点 `×` 关闭），每个 tab 对应一个独立的 shell 进程，互不共享
-- 页面顶部的名字（默认是电脑的 hostname）点一下就能改，方便同时开着好几台电脑的页面时分清楚哪个 tab 是哪台机器
-- 网络短暂中断（wifi 抖动、笔记本合盖、手机锁屏）会自动重连，30 秒内恢复的话正在跑的命令不会丢（可用 `RECONNECT_GRACE_MS` 环境变量调整这个宽限期）；超过宽限期或手动关闭 tab 才会真正结束该终端
-- 终端里按 `Ctrl/Cmd+F` 能搜索当前回滚内容；窄屏（手机）下会出现一排 Esc / Tab / Ctrl+C / Ctrl+D / 方向键按钮，方便触屏输入
-- 页面顶部有个连接数徽标，点开能看到当前谁连着（IP + 连接时间）；第一次打开链接会问一下"这台设备叫什么名字"，填了的话对方就能在这个列表里看到有意义的名字，不填就显示 IP
-- 可选的会话记录（默认关闭），开启后能事后查"这台电脑上通过 webcli 都被做了什么"（见下）
-- 每个 tab 默认叫 `webcli-1`/`webcli-2`，双击标签能改成自己好认的名字（比如"部署脚本""看日志"）
-- 支持浅色/深色主题，默认跟随系统，也可以在头部 ⋯ 菜单里手动切换并记住选择；终端内容区本身始终保持深色（这是终端类工具的通用习惯）
-- 头部"命令"菜单能保存自己的快捷命令（比如 `cd` 到常用目录、常跑的一条脚本），点一下直接在当前 tab 里执行；这份列表存在浏览器本地，不同设备/浏览器各自独立
-- 手机上体验做了专门适配：正确的 viewport（不再是缩小的桌面版）、21 个辅助键（含粘滞 Ctrl/Alt）、可"添加到主屏幕"当 App 用
-- **刷新页面/关标签页重开也能恢复终端**：会话 id 存在浏览器里，服务端保留最近 256KB 输出，重连时回放并让 vim/top 自动重绘
-- 同一个终端可以在多台设备上**同时**打开（笔记本 + 手机一起看），终端尺寸取最小的那个
-- 启动时终端直接打印**二维码**，手机扫一下就连上；页面头部也有个 ▣ 按钮随时调出来
-- tab 标签默认显示当前前台进程（`zsh` → `vim` → `top`），双击改名后就固定成你起的名字
-- 把文件**拖到终端区域**即可上传到这台机器的 `~/webcli-uploads/`
+## 目录
 
-## 安装（被控端：这台电脑要被远程操作）
+- [快速开始](#快速开始)
+- [控制面板](#控制面板推荐日常入口)
+- [架构设计](#架构设计)
+- [功能与解决的问题](#功能与解决的问题)
+- [更新流程](#更新流程)
+- [权限与访问控制](#权限与访问控制)
+- [开机自启](#开机自启可选)
+- [环境变量](#环境变量)
+- [安全须知](#安全须知)
+- [已知问题](#已知问题)
 
-同一局域网内，**每台**想被远程操作的电脑都要各自装一份、各自起一个实例——谁的电脑跑这个服务，谁的终端就被暴露出来，不存在"装一次，所有电脑共用"。
+## 快速开始
 
-**前提**：装好 [Node.js](https://nodejs.org/)（建议 18 及以上版本）。
-
-1. 克隆代码：
-   ```bash
-   git clone https://github.com/zhaosay/webcli.git
-   # 私有仓库、且该电脑已登录有权限的 GitHub 账号，也可以用：
-   # gh repo clone zhaosay/webcli
-   cd webcli
-   ```
-2. 启动：
-   - **macOS**：双击 `start.command`，或命令行 `./start.sh`
-   - **Windows**：双击 `start.bat`
-   
-   首次启动会自动 `npm install` 装依赖（`node-pty` 是原生模块，如果提示要跑 `npm approve-scripts node-pty`，跑一下就行）。
-3. 启动成功后，终端里会打印访问地址：
-   ```
-   [webcli] open: http://<这台电脑名>.local:3050/?token=xxxxxxxxxxxxxxxx
-   ```
-   这就是别人要用来连接这台电脑的完整链接。
-
-- Token 每台电脑各自生成一份，存在代码目录上一级的 `../data/webcli/token.txt`，不进 git、不跨机器共用；只要不删这个文件，重启服务链接不变
-- 默认端口 `3050`，可用环境变量覆盖：`PROJECT_PORT=8080 ./start.sh`
-- 想开机自启/常驻，自己包一层 `nohup ./start.sh &`，或写个系统级自启动项
-
-## 更新（被控端）
-
-代码有更新时，在项目目录里跑（或 macOS 双击 `update.command` / Windows 双击 `update.bat`）：
+**前提**：装好 [Node.js](https://nodejs.org/)（18+）。
 
 ```bash
-./update.sh
+git clone https://github.com/zhaosay/webcli.git
+cd webcli
 ```
 
-自动 `git pull`（只做 fast-forward，有本地冲突会直接报错，不会帮你丢改动；`package-lock.json` 是各机器 `npm install` 自动生成的文件，脚本会先丢弃它的本地改动再拉取，不会因为这个卡住），`package.json`/`package-lock.json` 有变化会顺便 `npm install`，**装完会自动杀掉旧进程、重启服务**，不需要再手动操作——同一个终端窗口会从"更新日志"无缝切到"服务运行日志"。杀旧进程不会丢 token/配置，重开后访问链接不变。
+| 操作 | macOS | Windows |
+| --- | --- | --- |
+| 启动 | 双击 `start.command` | 双击 `start.bat` |
+| 日常控制面板（推荐） | 双击 `webcli.command` | 见下方[控制面板](#控制面板推荐日常入口) |
+| 端口被占用 | 已自动清理，见[已知问题](#已知问题) | 同左 |
 
-如果自动重启没生效（比如旧版本没有这个功能、进程识别不到），再手动来一下：
-
-- **macOS**：`lsof -ti:3050 | xargs kill && ./start.sh`
-- **Windows**：`netstat -ano | findstr :3050` 查 PID，`taskkill /PID <PID> /F`，再 `start.bat`
-
-多台电脑各自更新，版本容易不一致——启动时终端会打印 `[webcli] version: v0.2.0 (b531cb2)`，页面顶部（电脑名旁边）也有同样的小字，鼠标悬停能看到提交时间，用来确认这台机器到底跑的是哪个版本。
-
-## 打开（客户端：在别的设备上访问）
-
-想临时操作某台电脑的人，**不需要装任何东西**：
-
-1. 确认自己的设备（电脑/手机）和目标电脑在同一局域网
-2. 拿到目标电脑给的访问链接（形如 `http://xxx.local:3050/?token=xxx`，见上面"安装"步骤 3 或下面"分享"）
-3. 浏览器直接打开这个链接，即可看到并操作终端
-
-页面内自带 tab 栏，点 `+` 可以再开一个终端（各 tab 是独立 shell 进程）；页面顶部名字（默认是电脑 hostname）点一下能改，方便同时开多台电脑时区分。
-
-## 分享（把访问链接发给别人）
-
-- 被控端启动时终端打印的 `open:` 那行，就是完整访问链接，直接复制发给对方
-- 或者：被控端自己先用浏览器打开这个链接，页面顶部有个 **复制链接** 按钮，点一下把当前网址复制到剪贴板，再转发给要连接的人
-- 链接里带 token，泄露给谁、就是把这台电脑的 shell 权限给了谁——不要发到公开/大群里（更多风险见下面"安全说明"）
-
-## 二次验证（可选，默认关闭）
-
-访问链接里的 token 一旦泄露（比如浏览器历史记录、截图、分享到群里），任何人都能连进来。如果需要多一道独立防护，可以开启二次验证——除了 URL 里的 token，还需要**单独输入**一把密钥（不放在 URL 里，不容易跟链接一起泄露）：
-
-```bash
-./auth.sh on       # 开启，每次都会生成一把新密钥
-./auth.sh off      # 关闭
-./auth.sh status   # 查看当前状态/密钥
+```mermaid
+flowchart LR
+  A["git clone"] --> B["双击 start.command / start.bat"]
+  B --> C["首次自动 npm install"]
+  C --> D["打印访问链接 + 二维码"]
+  D --> E["发给同局域网设备，浏览器直接打开"]
 ```
 
-开关**立即生效，不需要重启服务**（不会打断正在跑的终端）。开启后浏览器打开链接会多弹一个"输入二次验证密钥"的框，输入一次后这个浏览器标签页会记住（`sessionStorage`，关闭标签页就清掉），不用每个新 tab 都重复输入。密钥请单独发给需要连接的人，不要和访问链接放在一起分享。
+启动成功后终端会打印：
 
-## 重新生成 token
-
-怀疑访问链接泄露了（比如截图分享出去、被人看到浏览器历史记录），可以换一把新 token：
-
-```bash
-./token.sh regen    # 生成新 token 并重启服务
-./token.sh status   # 查看当前 token
+```
+[webcli] open: http://<这台电脑名>.local:3050/?token=xxxxxxxxxxxxxxxx
 ```
 
-`regen` 会**立即重启服务**——不光是让新链接生效，还会把当前所有已连接的设备（不管是谁）强制断开，旧链接（不管有没有还在用）全部失效。重启后跟正常启动一样，终端会打印新的完整访问链接，重新发给需要连接的人即可。
+把这个完整链接发给同局域网内想连接的设备，浏览器直接打开即可——**对方不需要装任何东西**。也可以在页面顶部点"复制链接"按钮拿到当前地址，或者手机直接扫启动时打印的二维码。
 
-## 会话记录（可选，默认关闭）
-
-想事后能查"这台电脑上通过 webcli 都被做了什么"，可以开启会话记录：
-
-```bash
-./log.sh on       # 开启，实时生效，不用重启
-./log.sh off      # 关闭
-./log.sh status   # 查看开关状态、日志数量和占用空间
-./log.sh list     # 按时间列出所有日志文件
-```
-
-几个关键点：
-
-- **只记屏幕输出，不记按键**：`sudo`/`ssh` 之类的密码输入本来就不会回显到终端输出里，所以只存输出天然不会把密码存成明文；但反过来说，**终端里 `cat`/查看过的任何文件内容、执行结果，都会原样进日志**——把 `../data/webcli/logs/` 这个目录当敏感文件对待，别不当回事
-- 开关**实时生效不需要重启**，但只影响**新建立的连接**，开的时候已经连着的终端不会突然开始被记录
-- 默认保留 **7 天**，超期自动清理（服务启动时清一次，之后每 24 小时清一次），可用环境变量 `LOG_RETENTION_DAYS` 覆盖天数
-- 日志是纯文本（保留了颜色等转义序列），用 `less -R <文件路径>` 看效果最接近原始终端；每次连接/断开/重连都会在文件里插入一行标记（带设备名、IP、时间），方便定位是谁在什么时候做的
-
-## 开机自启（可选）
-
-**macOS**：用 `contrib/com.webcli.server.plist` 模板——按文件里的注释把两处路径占位符替换成实际路径，放到 `~/Library/LaunchAgents/`，然后：
-```bash
-launchctl load ~/Library/LaunchAgents/com.webcli.server.plist    # 启用
-launchctl unload ~/Library/LaunchAgents/com.webcli.server.plist  # 禁用
-```
-
-**Windows**：用系统自带的任务计划，登录时自动跑 `start.bat`（把路径换成实际项目路径）：
-```cmd
-schtasks /create /tn "webcli" /tr "C:\path\to\webcli\start.bat" /sc onlogon
-schtasks /delete /tn "webcli" /f   REM 取消
-```
+> Token 每台电脑各自生成，存在项目目录上一级的 `../data/webcli/token.txt`，不进 git；只要不删这个文件，重启服务链接不变。默认端口 `3050`，可用 `PROJECT_PORT=8080 ./start.sh` 覆盖。
 
 ## 控制面板（推荐日常入口）
 
-不想记这么多脚本，双击 `webcli.command`（macOS）或跑 `./webcli.sh`，是个选数字的菜单，把下面所有脚本都包在里面了：
+不想记一堆脚本名字，双击 `webcli.command`（macOS）或跑 `./webcli.sh`，是个选数字的菜单：
 
 ```
   状态   ● 运行中 (端口 3050)
@@ -153,41 +64,137 @@ schtasks /delete /tn "webcli" /f   REM 取消
                           9  安装全局 webcli 命令
 ```
 
-选 `9` 装成全局命令后，任何目录敲 `webcli` 都能呼出面板，`webcli 3` 直接更新重启。
+选 `9` 装成全局命令后，任何目录敲 `webcli` 都能呼出这个面板，`webcli 3` 直接更新重启。下面各节讲的都是这个菜单背后对应的脚本，想直接用命令行操作也可以。
 
-## HTTPS（可选，默认关闭）
+## 架构设计
+
+| 层 | 文件 | 作用 |
+| --- | --- | --- |
+| 入口 | `server.js` | 建 HTTP/WebSocket server，接上路由和会话管理，可选加载 TLS 证书 |
+| 配置 | `lib/config.js` | 端口、数据目录、各类超时/保留期常量，均可用环境变量覆盖 |
+| 鉴权 | `lib/auth.js` | token / 二次验证密钥校验、WebSocket 同源校验、按 IP 限流锁定 |
+| 会话管理 | `lib/pty-sessions.js` | 每个会话 id 对应一个真实 shell 进程 + 一组正在看它的连接（`viewers`），支撑多设备同时挂载、断线宽限期、输出缓冲回放 |
+| HTTP 路由 | `lib/routes.js` | 静态文件 + `/api/name`、`/api/version`、`/api/connections`、`/api/auth-status` |
+| 会话记录 | `lib/session-log.js` | 可选把终端输出落盘，按天数自动清理 |
+| 二维码 / 图标 | `lib/qr.js`、`lib/icon.js` | 启动时终端打印二维码、PWA 图标 |
+| 前端 | `public/index.html` | 单文件，[`xterm.js`](https://xtermjs.org/) 渲染终端，原生 WebSocket，无需构建 |
+| 运行时数据 | `../data/webcli/` | token / 电脑名 / 日志 / 证书，存在项目目录**外层**，不进 git、不跨机器共享 |
+
+```mermaid
+flowchart LR
+  Browser["浏览器 xterm.js"] -- "HTTP 静态页面 + /api/*" --> Server["server.js"]
+  Browser -- "WebSocket 终端输入输出" --> Server
+  Server --> Auth["lib/auth.js<br/>token · 限流"]
+  Server --> Sessions["lib/pty-sessions.js<br/>会话 id → pty + viewers"]
+  Sessions --> Pty["node-pty<br/>真实 shell 进程"]
+  Sessions -. 可选 .-> Log["lib/session-log.js"]
+```
+
+## 功能与解决的问题
+
+| 功能 | 解决的问题 |
+| --- | --- |
+| 多设备同时查看同一终端 | 手机 + 笔记本想一起盯着同一个会话，尺寸自动取最小的那台 |
+| 断线重连 + 输出回放 | wifi 抖动、笔记本合盖、切网络导致会话/画面丢失 |
+| 二维码连接 | 手机上手动敲长链接太麻烦 |
+| 端口占用自动清理 | 忘记关旧进程导致启动时 `EADDRINUSE` 报错 |
+| 重新生成 token | 链接不小心截图分享/被人看到浏览器历史 |
+| 可选会话记录 | 想事后查这台电脑被远程做了什么 |
+| 可选二次验证 | token 单独泄露时再加一道独立防线 |
+| 主题 + 头部重新分组 | 界面拥挤，看不清当前谁连着 |
+| 快捷命令面板 | 常用命令（`cd` 到某目录、跑某个脚本）每次都要重新敲 |
+| 版本号常驻显示 | 多台电脑各自更新，版本容易对不上，出问题不好排查 |
+| 拖拽文件上传 | 传文件到远程机器不方便 |
+
+## 更新流程
+
+```bash
+./update.sh   # 或双击 update.command / update.bat，或控制面板选 3
+```
+
+```mermaid
+flowchart TD
+  A["./update.sh"] --> B["git pull"]
+  B --> C{"package.json 变了？"}
+  C -- 是 --> D["npm install"]
+  C -- 否 --> E["清理占用端口的旧 webcli 进程"]
+  D --> E
+  E --> F["启动新进程"]
+  F --> G["打印新版本号 + 访问链接"]
+```
+
+全程不需要手动干预。多台电脑各自更新，页面头部（电脑名旁边）和启动日志都会显示当前版本号，方便确认这台机器到底跑的是哪个版本。
+
+## 权限与访问控制
+
+<table>
+<tr><td width="200"><b>分享链接</b></td><td>
+
+启动日志里 `open:` 那行就是完整链接，或页面顶部"复制链接"按钮。链接里带 token，**泄露给谁就是把 shell 权限给了谁**——不要发到公开群里。
+
+</td></tr>
+<tr><td><b>二次验证</b><br><sub>默认关闭</sub></td><td>
+
+```bash
+./auth.sh on|off|status
+```
+
+除了链接里的 token，再要求单独输入一把密钥（不放在 URL 里，不容易随链接一起泄露）。立即生效，不打断正在跑的终端。
+
+</td></tr>
+<tr><td><b>重新生成 token</b></td><td>
+
+```bash
+./token.sh regen|status
+```
+
+怀疑链接泄露了就换一把新的。`regen` 会**立即重启服务**，把当前所有连接（不管是谁）强制踢掉，旧链接全部失效。
+
+</td></tr>
+<tr><td><b>会话记录</b><br><sub>默认关闭</sub></td><td>
+
+```bash
+./log.sh on|off|status|list
+```
+
+只记屏幕输出、不记按键（`sudo` 密码本来就不回显，天然不会被记下来）；但 `cat` 过的文件内容会原样进日志，把日志目录当敏感文件对待。默认保留 7 天，`less -R <文件>` 查看效果最接近原始终端。
+
+</td></tr>
+<tr><td><b>HTTPS</b><br><sub>默认关闭</sub></td><td>
 
 ```bash
 WEBCLI_TLS=1 ./start.sh
 ```
 
-首次启动用 `openssl` 生成自签名证书存到 `../data/webcli/`（SAN 覆盖 hostname.local 和各网卡 IP）。浏览器会警告一次"证书不受信任"，点继续即可。好处不只是加密：`navigator.clipboard`、PWA、Service Worker 都要求安全上下文，只有 https 下才完全正常。
+首次启动自动生成自签名证书，浏览器会警告一次"不受信任"，点继续即可。剪贴板、PWA、Service Worker 都要求安全上下文，只有开了这个才完全好用。
 
-没装 `openssl` 会自动退回 http 并打印提示。
+</td></tr>
+</table>
+
+## 开机自启（可选）
+
+| | macOS | Windows |
+| --- | --- | --- |
+| 启用 | `launchctl load ~/Library/LaunchAgents/com.webcli.server.plist`<br><sub>模板见 `contrib/com.webcli.server.plist`，先替换里面的路径占位符</sub> | `schtasks /create /tn "webcli" /tr "C:\path\to\webcli\start.bat" /sc onlogon` |
+| 禁用 | `launchctl unload ~/Library/LaunchAgents/com.webcli.server.plist` | `schtasks /delete /tn "webcli" /f` |
 
 ## 环境变量
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PROJECT_PORT` | `3050` | 监听端口 |
-| `WEBCLI_TLS` | `0` | `1` 启用自签名 https |
-| `RECONNECT_GRACE_MS` | `30000` | 无人连接时会话保留时长 |
+| `WEBCLI_TLS` | `0` | `1` 启用自签名 HTTPS |
+| `RECONNECT_GRACE_MS` | `30000` | 断线后会话保留时长（毫秒） |
 | `SCROLLBACK_BYTES` | `262144` | 重连回放的输出上限 |
 | `LOG_RETENTION_DAYS` | `7` | 会话日志保留天数 |
 | `WEBCLI_UPLOAD_DIR` | `~/webcli-uploads` | 拖拽上传的落地目录 |
 
-## 安全说明（请务必了解）
+## 安全须知
 
-这是一个"局域网内部小工具"的信任模型，不是给公网用的：
-
-- **默认没有 HTTPS**（可用 `WEBCLI_TLS=1` 打开），不开的话 token 和终端里的所有输入输出（包括你在里面敲的其他密码）在局域网内明文传输，能被同网段设备嗅探到
-- 服务监听 `0.0.0.0`，不是只暴露给"局域网"——如果这台电脑同时开着 VPN、热点共享等，那些网络里也能连进来。本质上"拿到 token + 网络能通"就等于拿到一个 shell，请自行评估风险，不要把 token 到处发
-- 没有账号体系，谁有 token 谁就能在这台电脑上跑任意命令；默认也没有操作审计（可选开启，见上面"会话记录"）
-- token 在 URL 里，会进浏览器历史和截图 —— 怀疑泄露就 `./token.sh regen`
-
-已经做的防护：WebSocket 和写接口做同源校验（防止你访问的恶意网页借你的浏览器操作终端）、鉴权失败每 IP 10 次锁 5 分钟、`Referrer-Policy: no-referrer` 防止 token 随跳转外泄、上传文件名剥离目录穿越。
+> 这是"局域网内部小工具"的信任模型，**不是给公网用的**：默认没有 HTTPS（明文传输）；服务监听 `0.0.0.0`，VPN/热点共享等网络里也能连进来；没有账号体系，谁有 token 谁就能跑任意命令；默认无操作审计。已经做的防护：WebSocket/写接口同源校验、鉴权失败每 IP 10 次锁 5 分钟、`Referrer-Policy: no-referrer`、上传文件名剥离目录穿越。**怀疑 token 泄露就 `./token.sh regen`。**
 
 ## 已知问题
 
-- `node-pty` 的 prebuilt 二进制解压后有时会丢失可执行位（`spawn-helper` 变成非可执行，报 `posix_spawnp failed`），`start.sh` 里已经加了 `chmod +x` 兜底，正常不需要手动处理
-- 首次监听端口时 macOS 可能会弹出防火墙提示"是否允许接受网络连接"，需要点允许
+- **端口被占用**：`start.sh`/`start.bat` 会自动清理"确认是 webcli 自己"的残留进程再启动；如果占用的是别的程序，会提示你换端口，不会误杀
+- `node-pty` 的 prebuilt 二进制解压后偶尔丢失可执行位，`start.sh` 已用 `chmod +x` 兜底
+- 首次监听端口时 macOS 可能弹防火墙提示，点允许即可
