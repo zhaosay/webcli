@@ -2,7 +2,19 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>LAN Terminal</title>
+<!-- Without this the page renders at a 980px desktop width and then scales
+     down, which makes the terminal unreadably small on a phone. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#09090b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="webcli">
+<meta name="referrer" content="no-referrer">
+<title>webcli</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="stylesheet" href="/vendor/xterm.css">
 <style>
   :root {
@@ -597,9 +609,74 @@
     cursor: pointer;
   }
   #mobile-keys button:active { background: rgba(45, 212, 191, .15); border-color: var(--accent); }
+  /* Ctrl/Alt latch on until the next keypress, so two-finger chords aren't
+     needed on a touchscreen. */
+  #mobile-keys button.sticky-on {
+    background: var(--accent);
+    color: #04201c;
+    border-color: var(--accent);
+  }
+  #mobile-keys::-webkit-scrollbar { display: none; }
 
   @media (max-width: 700px) {
     #mobile-keys { display: flex; }
+    #mobile-keys button { min-width: 42px; padding: 9px 12px; }
+  }
+  #mobile-keys.force-show { display: flex; }
+  #mobile-keys.force-hide { display: none; }
+
+  /* ---- drag & drop upload ---- */
+  #drop-hint {
+    display: none;
+    position: absolute;
+    inset: 8px;
+    z-index: 20;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--accent);
+    border-radius: .75rem;
+    background: rgba(20, 184, 166, .1);
+    color: var(--accent-hover);
+    font-size: 14px;
+    font-weight: 600;
+    pointer-events: none;
+  }
+  #drop-hint.show { display: flex; }
+
+  /* ---- share / QR modal ---- */
+  #qr-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .7);
+    padding: 20px;
+  }
+  #qr-modal.show { display: flex; }
+  #qr-modal .qr-card {
+    width: min(340px, 100%);
+    max-height: 90dvh;
+    overflow: auto;
+    padding: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: .75rem;
+    text-align: center;
+  }
+  #qr-modal h3 { margin: 0 0 4px; font-size: 15px; color: var(--text); }
+  #qr-modal p { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+  #qr-modal svg { width: 100%; height: auto; border-radius: .5rem; background: #fff; }
+  #qr-url {
+    margin: 12px 0;
+    padding: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    word-break: break-all;
+    color: var(--muted);
+    background: var(--input-bg);
+    border-radius: .375rem;
   }
 </style>
 <script>
@@ -679,6 +756,7 @@
           <div id="version-info"></div>
         </div>
       </div>
+      <button id="qr-btn" type="button" title="扫码在手机上打开">&#9636;</button>
       <button id="copy-link-btn" type="button">复制链接</button>
     </div>
     <div id="tabbar">
@@ -688,18 +766,41 @@
     <div id="mobile-keys">
       <button type="button" data-key="esc">Esc</button>
       <button type="button" data-key="tab">Tab</button>
+      <button type="button" data-sticky="ctrl">Ctrl</button>
+      <button type="button" data-sticky="alt">Alt</button>
       <button type="button" data-key="ctrl-c">^C</button>
       <button type="button" data-key="ctrl-d">^D</button>
+      <button type="button" data-key="ctrl-z">^Z</button>
+      <button type="button" data-key="left">&larr;</button>
       <button type="button" data-key="up">&uarr;</button>
       <button type="button" data-key="down">&darr;</button>
-      <button type="button" data-key="left">&larr;</button>
       <button type="button" data-key="right">&rarr;</button>
+      <button type="button" data-key="home">Home</button>
+      <button type="button" data-key="end">End</button>
+      <button type="button" data-key="pgup">PgUp</button>
+      <button type="button" data-key="pgdn">PgDn</button>
+      <button type="button" data-key="dash">-</button>
+      <button type="button" data-key="underscore">_</button>
+      <button type="button" data-key="slash">/</button>
+      <button type="button" data-key="pipe">|</button>
+      <button type="button" data-key="tilde">~</button>
+      <button type="button" data-key="star">*</button>
     </div>
     <div id="panes">
       <div id="empty-state">
         <div class="empty-icon">&gt;_</div>
         <div class="empty-title">还没有打开的终端</div>
         <div class="empty-hint">点击左上角 <strong>+</strong> 开一个</div>
+      </div>
+      <div id="drop-hint">松手上传到 ~/webcli-uploads</div>
+      <div id="qr-modal">
+        <div class="qr-card">
+          <h3>扫码在手机上打开</h3>
+          <p>链接含 token，请勿公开分享</p>
+          <div id="qr-box"></div>
+          <div id="qr-url"></div>
+          <button id="qr-close" type="button">关闭</button>
+        </div>
       </div>
       <div id="search-bar">
         <input id="search-input" type="text" placeholder="Find in terminal…" autocomplete="off">
@@ -833,6 +934,10 @@
       function runQuickCommand(command) {
         const session = currentSession();
         if (!session || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
+        // A latched Ctrl/Alt from the mobile key row must not leak into a canned
+        // command — drop the modifiers rather than mangling the first character.
+        setSticky('ctrl', false);
+        setSticky('alt', false);
         session.ws.send(JSON.stringify({ type: 'input', data: command + '\n' }));
         session.term.focus();
       }
@@ -1017,17 +1122,71 @@
       document.getElementById('search-close').addEventListener('click', closeSearch);
 
       const MOBILE_KEY_SEQ = {
-        esc: '\x1b', tab: '\t', 'ctrl-c': '\x03', 'ctrl-d': '\x04',
+        esc: '\x1b', tab: '\t', 'ctrl-c': '\x03', 'ctrl-d': '\x04', 'ctrl-z': '\x1a',
         up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C',
+        home: '\x1b[H', end: '\x1b[F', pgup: '\x1b[5~', pgdn: '\x1b[6~',
+        dash: '-', underscore: '_', slash: '/', pipe: '|', tilde: '~', star: '*',
       };
-      document.getElementById('mobile-keys').addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-key]');
-        if (!btn) return;
-        const session = currentSession();
+
+      // Ctrl and Alt latch instead of needing to be held: tap Ctrl, then a
+      // letter, and the two are combined. Soft keyboards never emit real
+      // keydown events for letters, so the combining happens in term.onData.
+      let stickyCtrl = false;
+      let stickyAlt = false;
+
+      function setSticky(which, on) {
+        if (which === 'ctrl') stickyCtrl = on; else stickyAlt = on;
+        document.querySelectorAll('#mobile-keys button[data-sticky]').forEach((b) => {
+          b.classList.toggle('sticky-on', b.dataset.sticky === 'ctrl' ? stickyCtrl : stickyAlt);
+        });
+      }
+
+      /** Applies any latched modifier, then sends the data to the shell. */
+      function sendInput(session, data) {
         if (!session || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
-        session.ws.send(JSON.stringify({ type: 'input', data: MOBILE_KEY_SEQ[btn.dataset.key] }));
-        session.term.focus();
+        let out = data;
+        if (stickyCtrl && out.length === 1) {
+          const c = out.toUpperCase().charCodeAt(0);
+          if (c >= 64 && c <= 95) out = String.fromCharCode(c - 64);
+          else if (c === 63) out = '\x7f';
+          setSticky('ctrl', false);
+        }
+        if (stickyAlt && out.length >= 1) {
+          out = '\x1b' + out;
+          setSticky('alt', false);
+        }
+        session.ws.send(JSON.stringify({ type: 'input', data: out }));
+      }
+
+      document.getElementById('mobile-keys').addEventListener('pointerdown', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        // never take focus: that would dismiss the on-screen keyboard
+        e.preventDefault();
+        if (btn.dataset.sticky) {
+          setSticky(btn.dataset.sticky, btn.dataset.sticky === 'ctrl' ? !stickyCtrl : !stickyAlt);
+          return;
+        }
+        const session = currentSession();
+        if (!session) return;
+        const seq = MOBILE_KEY_SEQ[btn.dataset.key];
+        if (seq) sendInput(session, seq);
       });
+
+      // Sessions live on the server, so remembering their ids lets a page
+      // reload (or a second device opening the same link) pick the running
+      // terminals back up instead of silently orphaning them.
+      const SIDS_STORAGE = 'webcli-sids';
+      function loadSids() {
+        try {
+          const v = JSON.parse(localStorage.getItem(SIDS_STORAGE) || '[]');
+          return Array.isArray(v) ? v.filter((s) => typeof s === 'string') : [];
+        } catch { return []; }
+      }
+      function saveSids() {
+        const live = [...sessions.values()].map((s) => s.sid).filter(Boolean);
+        try { localStorage.setItem(SIDS_STORAGE, JSON.stringify(live)); } catch {}
+      }
 
       function newSid() {
         if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -1039,7 +1198,9 @@
         const keyParam = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
         const deviceName = localStorage.getItem(DEVICE_NAME_STORAGE) || '';
         const deviceParam = deviceName ? `&device=${encodeURIComponent(deviceName)}` : '';
-        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(session.sid)}${keyParam}${deviceParam}`);
+        const dims = `&cols=${session.term.cols}&rows=${session.term.rows}`;
+        const ws = new WebSocket(`${proto}://${location.host}/?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(session.sid)}${keyParam}${deviceParam}${dims}`);
+        ws.binaryType = 'arraybuffer';
         session.ws = ws;
 
         const setDot = (state) => { session.dot.className = `tab-dot ${state}`; };
@@ -1054,7 +1215,23 @@
             sendResize(session);
           }
         };
-        ws.onmessage = (e) => session.term.write(e.data);
+        // Binary frames are terminal bytes; text frames are JSON control
+        // messages (tab titles, resume info).
+        ws.onmessage = (e) => {
+          if (typeof e.data === 'string') {
+            let msg;
+            try { msg = JSON.parse(e.data); } catch { return; }
+            if (msg.type === 'hello') {
+              if (msg.resumed) session.term.reset();
+              if (msg.title) applyAutoTitle(session, msg.title);
+              saveSids();
+            } else if (msg.type === 'title') {
+              applyAutoTitle(session, msg.title);
+            }
+            return;
+          }
+          session.term.write(new Uint8Array(e.data));
+        };
         ws.onclose = () => {
           setDot('disconnected');
           if (session.closing) return;
@@ -1087,10 +1264,18 @@
         if (!session) return;
         session.closing = true;
         if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
-        if (session.ws) session.ws.close();
+        if (session.ws) {
+          // Closing a tab by hand means "kill the shell"; a dropped connection
+          // does not, which is what the reconnect grace period is for.
+          if (session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(JSON.stringify({ type: 'kill' }));
+          }
+          session.ws.close();
+        }
         session.pane.remove();
         session.tabEl.remove();
         sessions.delete(id);
+        saveSids();
         updateEmptyState();
         updateNewTabBtn();
         if (activeId === id) {
@@ -1100,7 +1285,15 @@
         }
       }
 
-      function createSession() {
+      // Tabs are labelled with the foreground process (zsh -> vim -> top) until
+      // the user renames one by hand, at which point their name wins.
+      function applyAutoTitle(session, title) {
+        if (!title || session.renamed) return;
+        session.labelEl.textContent = title;
+        session.labelEl.title = '双击重命名';
+      }
+
+      function createSession(existingSid) {
         if (sessions.size >= MAX_SESSIONS) return;
         const id = ++sessionCounter;
 
@@ -1132,6 +1325,10 @@
             const value = input.value.trim();
             input.replaceWith(tabLabelEl);
             tabLabelEl.textContent = value || current;
+            // a hand-picked name pins the tab; stop overwriting it with the
+            // foreground process name
+            const s = sessions.get(id);
+            if (s && value) s.renamed = true;
           };
           input.addEventListener('keydown', (ev) => {
             if (ev.key === 'Enter') input.blur();
@@ -1176,20 +1373,18 @@
         });
 
         const session = {
-          id, sid: newSid(), term, fitAddon, searchAddon, ws: null, pane, tabEl,
+          id, sid: existingSid || newSid(), term, fitAddon, searchAddon, ws: null, pane, tabEl,
           dot: tabEl.querySelector('.tab-dot'), closing: false, reconnectAttempts: 0, reconnectTimer: null,
+          labelEl: tabLabelEl, renamed: false,
         };
         sessions.set(id, session);
+        saveSids();
         updateEmptyState();
         updateNewTabBtn();
 
         connectWs(session);
 
-        term.onData((data) => {
-          if (session.ws && session.ws.readyState === WebSocket.OPEN) {
-            session.ws.send(JSON.stringify({ type: 'input', data }));
-          }
-        });
+        term.onData((data) => sendInput(session, data));
 
         tabEl.addEventListener('click', (e) => {
           if (e.target.closest('.tab-close')) return;
@@ -1203,7 +1398,7 @@
         activateSession(id);
       }
 
-      newTabBtn.addEventListener('click', createSession);
+      newTabBtn.addEventListener('click', () => createSession());
 
       window.addEventListener('resize', () => {
         const session = sessions.get(activeId);
@@ -1212,8 +1407,113 @@
           sendResize(session);
         }
       });
+      if (window.visualViewport) {
+        // the on-screen keyboard resizes the visible area without firing resize
+        window.visualViewport.addEventListener('resize', () => {
+          const session = sessions.get(activeId);
+          if (session) {
+            session.fitAddon.fit();
+            sendResize(session);
+          }
+        });
+      }
 
-      createSession();
+      // Waking from a locked phone or a dead access point should resume
+      // immediately rather than waiting out the backoff.
+      const resumeNow = () => {
+        for (const session of sessions.values()) {
+          if (session.closing) continue;
+          if (!session.ws || session.ws.readyState > WebSocket.OPEN) {
+            if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+            session.reconnectAttempts = 0;
+            connectWs(session);
+          }
+        }
+      };
+      window.addEventListener('online', resumeNow);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') resumeNow();
+      });
+
+      // ---- share / QR ----
+      const qrModal = document.getElementById('qr-modal');
+      document.getElementById('qr-btn').addEventListener('click', async () => {
+        qrModal.classList.add('show');
+        document.getElementById('qr-box').innerHTML = '<p>生成中…</p>';
+        try {
+          const keyQ = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
+          const res = await fetch(`/api/share?token=${encodeURIComponent(token)}${keyQ}`);
+          const data = await res.json();
+          document.getElementById('qr-box').innerHTML = data.qr;
+          document.getElementById('qr-url').textContent = data.url;
+        } catch {
+          document.getElementById('qr-box').innerHTML = '<p>获取失败</p>';
+        }
+      });
+      document.getElementById('qr-close').addEventListener('click', () => qrModal.classList.remove('show'));
+      qrModal.addEventListener('click', (e) => {
+        if (e.target === qrModal) qrModal.classList.remove('show');
+      });
+
+      // ---- drag & drop upload ----
+      (function wireDrop() {
+        const hint = document.getElementById('drop-hint');
+        let depth = 0;
+        panesEl.addEventListener('dragenter', (e) => {
+          e.preventDefault();
+          if (++depth === 1) hint.classList.add('show');
+        });
+        panesEl.addEventListener('dragover', (e) => e.preventDefault());
+        panesEl.addEventListener('dragleave', () => {
+          if (--depth <= 0) { depth = 0; hint.classList.remove('show'); }
+        });
+        panesEl.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          depth = 0;
+          hint.classList.remove('show');
+          for (const file of [...(e.dataTransfer.files || [])]) {
+            const session = currentSession();
+            try {
+              const keyQ = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
+              const res = await fetch(`/api/upload?token=${encodeURIComponent(token)}${keyQ}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/octet-stream',
+                  'x-webcli-filename': encodeURIComponent(file.name),
+                },
+                body: file,
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || 'failed');
+              if (session) session.term.write(`\r\n\x1b[36m[已上传] ${data.path}\x1b[0m\r\n`);
+            } catch (err) {
+              if (session) session.term.write(`\r\n\x1b[31m[上传失败] ${err.message}\x1b[0m\r\n`);
+            }
+          }
+        });
+      })();
+
+      if (location.protocol === 'https:' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+
+      // Reopen whatever is still running server-side; only fall back to a fresh
+      // shell when there is nothing to resume.
+      (async function restore() {
+        let live = [];
+        try {
+          const keyQ = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
+          const res = await fetch(`/api/sessions?token=${encodeURIComponent(token)}${keyQ}`);
+          if (res.ok) live = (await res.json()).sessions || [];
+        } catch {}
+        const known = new Set(loadSids());
+        const resumable = live.filter((s) => known.has(s.sid)).sort((a, b) => a.createdAt - b.createdAt);
+        if (resumable.length) {
+          for (const s of resumable) createSession(s.sid);
+        } else {
+          createSession();
+        }
+      })();
       } // end initApp
 
       function startApp(secondaryKey) {
