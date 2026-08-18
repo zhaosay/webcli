@@ -1,6 +1,8 @@
 @echo off
 cd /d "%~dp0"
 
+if exist restart.bat call restart.bat stop
+
 if not exist node_modules (
   echo [webcli] node_modules not found, running npm install...
   call npm install

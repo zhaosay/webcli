@@ -2,6 +2,14 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
+if "%~1"=="stop" goto stop
+goto default
+
+:stop
+call :kill_if_tracked
+goto :eof
+
+:kill_if_tracked
 set "PID_FILE=..\data\webcli\server.pid"
 if exist "%PID_FILE%" (
   set /p OLD_PID=<"%PID_FILE%"
@@ -11,6 +19,10 @@ if exist "%PID_FILE%" (
     taskkill /PID !OLD_PID! /F >nul 2>&1
     timeout /t 1 /nobreak >nul
   )
+  del "%PID_FILE%" >nul 2>&1
 )
+exit /b 0
 
+:default
+call :kill_if_tracked
 call start.bat

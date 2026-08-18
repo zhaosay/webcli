@@ -195,6 +195,13 @@
   }
   .chrome-title:hover { color: var(--accent-hover); background: rgba(45, 212, 191, .1); }
 
+  #version-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    opacity: .7;
+  }
+
   .chrome-title-input {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -734,6 +741,7 @@
   <div id="app">
     <div id="chrome">
       <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
+      <span id="version-badge" title="点击 ⋯ 菜单看提交号和时间"></span>
       <div id="connections-badge" class="chrome-dropdown-anchor" title="点击查看当前连接">
         <span class="conn-dot"></span>
         <span id="conn-count">1</span>
@@ -849,8 +857,11 @@
       fetch('/api/name').then((r) => r.json()).then(({ name }) => { if (name) applyName(name); }).catch(() => {});
 
       const versionInfo = document.getElementById('version-info');
+      const versionBadge = document.getElementById('version-badge');
       fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate }) => {
-        versionInfo.textContent = `v${version}${commit ? ' · ' + commit : ''}`;
+        const label = `v${version}${commit ? ' · ' + commit : ''}`;
+        versionInfo.textContent = label;
+        versionBadge.textContent = `v${version}`;
         if (commitDate) versionInfo.title = commitDate;
       }).catch(() => {});
 

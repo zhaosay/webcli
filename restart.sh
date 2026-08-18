@@ -108,7 +108,7 @@ start_background() {
 }
 
 case "${1:-}" in
-  stop)   stop_server ;;
+  stop)   stop_server "${2:-}" ;;
   status) status_server ;;
   --bg|-b) stop_server quiet; start_background ;;
   -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' ;;
