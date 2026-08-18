@@ -7,6 +7,7 @@ const { TOKEN } = require('./lib/auth');
 const { createRequestHandler } = require('./lib/routes');
 const { handleUpgrade, shutdownAll } = require('./lib/pty-sessions');
 const { VERSION_INFO } = require('./lib/version');
+const { cleanupOldLogs } = require('./lib/session-log');
 
 const server = http.createServer(createRequestHandler());
 const wss = new WebSocket.Server({ noServer: true });
@@ -30,6 +31,9 @@ server.listen(PORT, '0.0.0.0', () => {
   const mdnsHost = hostname.endsWith('.local') ? hostname : `${hostname}.local`;
   const commitLabel = VERSION_INFO.commit ? ` (${VERSION_INFO.commit})` : '';
   console.log(`[webcli] version: v${VERSION_INFO.version}${commitLabel}`);
+  const removedLogs = cleanupOldLogs();
+  if (removedLogs) console.log(`[webcli] cleaned up ${removedLogs} expired session log(s)`);
+  setInterval(cleanupOldLogs, 24 * 60 * 60 * 1000);
   console.log(`[webcli] listening on 0.0.0.0:${PORT}`);
   console.log(`[webcli] open: http://${mdnsHost}:${PORT}/?token=${TOKEN}`);
   const nets = os.networkInterfaces();
