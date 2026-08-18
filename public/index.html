@@ -62,10 +62,18 @@
   html, body {
     margin: 0;
     height: 100%;
+    /* 100% (and 100vh) on mobile browsers is the "chrome collapsed" size, which
+       doesn't match the currently-visible area while the address bar is shown.
+       That mismatch lets the page scroll by a hair, which toggles the address
+       bar, which fires a resize event, which we react to — a feedback loop
+       that reads as the whole UI flickering up and down. 100dvh tracks the
+       actual visible viewport instead, so there's nothing to scroll into. */
+    height: 100dvh;
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
     transition: background .15s ease, color .15s ease;
+    overflow: hidden;
   }
 
   /* ---- token gate ---- */
@@ -1400,22 +1408,25 @@
 
       newTabBtn.addEventListener('click', () => createSession());
 
-      window.addEventListener('resize', () => {
-        const session = sessions.get(activeId);
-        if (session) {
-          session.fitAddon.fit();
-          sendResize(session);
-        }
-      });
-      if (window.visualViewport) {
-        // the on-screen keyboard resizes the visible area without firing resize
-        window.visualViewport.addEventListener('resize', () => {
+      // Debounced: mobile browsers can fire several resize/visualViewport
+      // events in quick succession (address bar show/hide, keyboard open/close),
+      // and fit()+resize() on every single one is what turns a single real
+      // resize into a visible flicker.
+      let resizeDebounce = null;
+      const handleViewportResize = () => {
+        clearTimeout(resizeDebounce);
+        resizeDebounce = setTimeout(() => {
           const session = sessions.get(activeId);
           if (session) {
             session.fitAddon.fit();
             sendResize(session);
           }
-        });
+        }, 80);
+      };
+      window.addEventListener('resize', handleViewportResize);
+      if (window.visualViewport) {
+        // the on-screen keyboard resizes the visible area without firing resize
+        window.visualViewport.addEventListener('resize', handleViewportResize);
       }
 
       // Waking from a locked phone or a dead access point should resume
