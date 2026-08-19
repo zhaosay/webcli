@@ -1524,6 +1524,20 @@
         window.visualViewport.addEventListener('resize', handleViewportResize);
       }
 
+      // Each open tab here is usually a different physical machine (a
+      // separate token/link per webcli instance), so an accidental browser
+      // tab close is easy to make and — without this — easy to not notice
+      // until the reconnect grace period has already run out. The confirm
+      // text itself is ignored by modern browsers (they show their own
+      // generic "leave site?" wording), but setting returnValue is what
+      // actually makes the prompt appear at all.
+      window.addEventListener('beforeunload', (e) => {
+        if (sessions.size > 0) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      });
+
       // Waking from a locked phone or a dead access point should resume
       // immediately rather than waiting out the backoff.
       const resumeNow = () => {
