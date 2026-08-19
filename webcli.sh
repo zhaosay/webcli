@@ -50,6 +50,7 @@ header() {
   echo "  ${DIM}5  二次验证开关     6  重新生成 token${RESET}"
   echo "  ${DIM}7  会话记录开关     8  查看日志${RESET}"
   echo "  ${DIM}9  安装全局 webcli 命令${RESET}"
+  echo "  ${DIM}u  卸载 webcli（删除所有数据和代码）${RESET}"
   echo "  ${DIM}0  退出${RESET}"
   echo
 }
@@ -162,6 +163,17 @@ do_install_cli() {
   esac
 }
 
+do_uninstall() {
+  echo
+  # uninstall.sh does its own irreversible-action confirmation (must type
+  # DELETE); only exits 0 once it has actually deleted this project
+  # directory, so the panel must not try to keep running past that point.
+  if ./uninstall.sh; then
+    exit 0
+  fi
+  pause
+}
+
 if [ $# -gt 0 ]; then
   case "$1" in
     1|restart) ./restart.sh --bg; exit $? ;;
@@ -169,8 +181,9 @@ if [ $# -gt 0 ]; then
     3|update)  do_update; exit 0 ;;
     4|link)    do_link; exit 0 ;;
     install)   do_install_cli; exit $? ;;
+    uninstall) do_uninstall; exit $? ;;
     -h|--help)
-      echo "用法: webcli [1|2|3|4|install]"
+      echo "用法: webcli [1|2|3|4|install|uninstall]"
       echo "  不带参数进交互菜单；1 重启 / 2 停止 / 3 更新重启 / 4 显示二维码"
       exit 0 ;;
   esac
@@ -189,6 +202,7 @@ while true; do
     7) do_log ;;
     8) do_logs ;;
     9) echo; do_install_cli; pause ;;
+    u|U) do_uninstall ;;
     0|q|Q) echo; exit 0 ;;
     *) ;;
   esac
