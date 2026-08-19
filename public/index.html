@@ -375,7 +375,7 @@
     color: var(--muted);
     padding: 2px 4px 6px;
   }
-  .theme-switch {
+  .theme-switch, .action-row {
     display: flex;
     gap: 3px;
     padding: 3px;
@@ -383,7 +383,7 @@
     border: 1px solid var(--border);
     border-radius: .375rem;
   }
-  .theme-switch button {
+  .theme-switch button, .action-row button {
     flex: 1;
     border: none;
     background: transparent;
@@ -395,7 +395,7 @@
     cursor: pointer;
     transition: background .15s ease, color .15s ease;
   }
-  .theme-switch button:hover { color: var(--text); }
+  .theme-switch button:hover, .action-row button:hover { color: var(--text); }
   .theme-switch button.active { background: var(--accent); color: #04201c; }
   .settings-divider { height: 1px; background: var(--border); margin: 8px 2px; }
   #version-info {
@@ -403,6 +403,13 @@
     font-size: 10px;
     color: var(--muted);
     padding: 0 4px;
+  }
+  #service-action-status {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 6px 4px 0;
+    min-height: 1.4em;
   }
 
   #copy-link-btn {
@@ -770,6 +777,13 @@
           </div>
           <div class="settings-divider"></div>
           <div id="version-info"></div>
+          <div class="settings-divider"></div>
+          <div class="settings-label">服务</div>
+          <div class="action-row">
+            <button type="button" id="update-btn">更新代码</button>
+            <button type="button" id="restart-btn">重启服务</button>
+          </div>
+          <div id="service-action-status" class="settings-meta"></div>
         </div>
       </div>
       <button id="qr-btn" type="button" title="扫码在手机上打开">&#9636;</button>
@@ -929,6 +943,10 @@
         quickcmdDropdown.classList.toggle('show', willShow);
       });
       quickcmdDropdown.addEventListener('click', (e) => e.stopPropagation());
+      // Without this, clicking update/restart (or anything else in here)
+      // bubbles to the document listener below and closes the menu on the
+      // same click — hiding the "重启中…" status line right as it appears.
+      settingsDropdown.addEventListener('click', (e) => e.stopPropagation());
       document.addEventListener('click', closeAllDropdowns);
       refreshConnections();
       setInterval(refreshConnections, 15000);
@@ -1021,6 +1039,55 @@
         applyTheme(b.dataset.themeChoice);
       }));
       applyTheme(localStorage.getItem(THEME_STORAGE) || 'auto');
+
+      const serviceActionStatus = document.getElementById('service-action-status');
+      const updateBtn = document.getElementById('update-btn');
+      const restartBtn = document.getElementById('restart-btn');
+
+      // The server that answers this POST is the one about to be killed and
+      // replaced, so there's no live channel back with a "how did it go".
+      // Once it responds (meaning the detached script was launched), poll
+      // /api/version until a server answers again, then reload so the page
+      // picks up whatever changed.
+      function waitForServerThenReload() {
+        serviceActionStatus.textContent = '重启中，请稍候…';
+        let attempts = 0;
+        const poll = setInterval(() => {
+          attempts += 1;
+          fetch('/api/version').then((r) => {
+            if (!r.ok) throw new Error('not ready');
+            clearInterval(poll);
+            serviceActionStatus.textContent = '已恢复，正在刷新…';
+            setTimeout(() => location.reload(), 400);
+          }).catch(() => {
+            if (attempts >= 60) {
+              clearInterval(poll);
+              serviceActionStatus.textContent = '等待超时，请手动刷新页面确认状态';
+            }
+          });
+        }, 1500);
+      }
+
+      function triggerServiceAction(btn, path, label) {
+        updateBtn.disabled = true;
+        restartBtn.disabled = true;
+        serviceActionStatus.textContent = `正在${label}…`;
+        fetch(`${path}?${authQuery}`, { method: 'POST' })
+          .then((r) => {
+            if (!r.ok) throw new Error('request failed');
+            // Give the detached script a moment to actually stop the old
+            // process before we start polling, or the first few polls would
+            // just hit the still-running (soon to be replaced) instance.
+            setTimeout(waitForServerThenReload, 1000);
+          })
+          .catch(() => {
+            serviceActionStatus.textContent = '请求失败，请检查终端日志';
+            updateBtn.disabled = false;
+            restartBtn.disabled = false;
+          });
+      }
+      updateBtn.addEventListener('click', () => triggerServiceAction(updateBtn, '/api/update', '更新代码'));
+      restartBtn.addEventListener('click', () => triggerServiceAction(restartBtn, '/api/restart', '重启服务'));
 
       chromeTitle.addEventListener('click', () => {
         const current = chromeTitle.textContent;
@@ -1164,14 +1231,20 @@
       function sendInput(session, data) {
         if (!session || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
         let out = data;
-        if (stickyCtrl && out.length === 1) {
-          const c = out.toUpperCase().charCodeAt(0);
-          if (c >= 64 && c <= 95) out = String.fromCharCode(c - 64);
-          else if (c === 63) out = '\x7f';
+        // Latch is consumed by the *next* input regardless of its shape —
+        // otherwise a paste (length !== 1) skipped the combining logic below
+        // but also skipped clearing stickyCtrl, leaving it latched to
+        // silently Ctrl-combine the next unrelated keystroke.
+        if (stickyCtrl) {
+          if (out.length === 1) {
+            const c = out.toUpperCase().charCodeAt(0);
+            if (c >= 64 && c <= 95) out = String.fromCharCode(c - 64);
+            else if (c === 63) out = '\x7f';
+          }
           setSticky('ctrl', false);
         }
-        if (stickyAlt && out.length >= 1) {
-          out = '\x1b' + out;
+        if (stickyAlt) {
+          if (out.length >= 1) out = '\x1b' + out;
           setSticky('alt', false);
         }
         session.ws.send(JSON.stringify({ type: 'input', data: out }));
@@ -1229,10 +1302,16 @@
           const wasReconnect = session.reconnectAttempts > 0;
           session.reconnectAttempts = 0;
           if (wasReconnect) session.term.write('\r\n\x1b[2m[reconnected]\x1b[0m\r\n');
-          if (activeId === session.id) {
-            session.fitAddon.fit();
-            sendResize(session);
-          }
+          // Panes stay in layout (hidden via opacity, not display:none) so
+          // fit() reports a real size even for an inactive tab — always fit
+          // on connect. Gating this on "is this the active tab" broke
+          // multi-tab restore: createSession() reassigns activeId to each
+          // new tab as it's created, so every tab but the last one would
+          // see activeId !== its own id by the time its socket actually
+          // opened, and stay stuck at whatever default size it was created
+          // with.
+          session.fitAddon.fit();
+          sendResize(session);
         };
         // Binary frames are terminal bytes; text frames are JSON control
         // messages (tab titles, resume info).

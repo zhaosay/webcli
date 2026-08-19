@@ -20,8 +20,29 @@ say() { echo "[webcli] $*"; }
 # truth — but it goes stale on a hard kill, and only a process whose command
 # line is actually our server.js may be signalled. Never kill a stranger that
 # merely happens to hold the port.
+#
+# A bare `grep "server\.js"` substring match isn't enough: it also matches any
+# unrelated Node project that happens to be entry-pointed at a file named
+# server.js. Since start.sh always launches with `exec node server.js` from
+# inside this project directory, also require the candidate process's cwd to
+# be exactly this directory — that's what actually identifies it as *our*
+# instance, not just some other server.js.
 is_ours() {
-  ps -p "$1" -o command= 2>/dev/null | grep -q "server\.js"
+  local cmd
+  cmd="$(ps -p "$1" -o command= 2>/dev/null)" || return 1
+  case "$cmd" in
+    *node*server.js*) ;;
+    *) return 1 ;;
+  esac
+  if command -v lsof >/dev/null 2>&1; then
+    local cwd
+    cwd="$(lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
+    [ -n "$cwd" ] && [ "$cwd" = "$DIR" ]
+  else
+    # No lsof to confirm cwd — fall back to the looser command-line match
+    # rather than refusing to ever recover from a stale port.
+    return 0
+  fi
 }
 
 find_pid() {
@@ -67,7 +88,7 @@ stop_server() {
 status_server() {
   local pid
   if pid="$(find_pid)"; then
-    say "运行中，pid $pid，端口 $PORT"
+    say "运行中，pid ${pid}，端口 ${PORT}"
     grep -m1 "open:" "$LOG_FILE" 2>/dev/null
     return 0
   fi
