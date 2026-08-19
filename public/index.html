@@ -1490,7 +1490,12 @@
         });
         tabEl.querySelector('.tab-close').addEventListener('click', (e) => {
           e.stopPropagation();
-          closeSession(id);
+          // Closing sends {type:'kill'} and actually ends the shell (unlike a
+          // dropped connection, which just waits out the reconnect grace
+          // period) — worth an "are you sure" before that's irreversible.
+          if (confirm(`关闭 "${tabLabelEl.textContent}"？这会结束里面正在跑的程序。`)) {
+            closeSession(id);
+          }
         });
 
         activateSession(id);
