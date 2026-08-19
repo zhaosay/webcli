@@ -294,6 +294,14 @@
   #settings-btn { font-size: 15px; font-weight: 400; }
   #settings-btn:hover, #quickcmd-btn:hover { background: rgba(127, 127, 127, .1); color: var(--text); }
 
+  /* Desktop/default: widget is just an inline flex row (chips + "+"), no
+     dropdown chrome at all. The mobile media query below turns it into a
+     collapsed "命令" trigger + dropdown grid instead. */
+  #quickcmd-widget { display: flex; align-items: center; }
+  #quickcmd-toggle { display: none; }
+  #quickcmd-panel { display: flex; align-items: center; gap: 5px; }
+  #quickcmd-divider { display: none; }
+
   #quickcmd-bar { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; overflow-x: auto; max-width: 40vw; }
   .quickcmd-chip {
     display: flex;
@@ -672,13 +680,58 @@
     #mobile-keys { display: flex; }
     #mobile-keys button { min-width: 42px; padding: 9px 12px; }
 
-    /* Title + version + quick commands + connections/settings/qr/copy-link
-       don't fit on one row on a phone; scroll sideways instead of wrapping
-       or overlapping. */
-    #chrome { overflow-x: auto; scrollbar-width: none; }
-    #chrome::-webkit-scrollbar { display: none; }
+    /* Title + version + connections/settings/qr/copy-link might not all fit
+       on one row on a phone — wrap to a second line instead. (Not
+       overflow-x:auto: that would also clip the settings/connections/
+       quick-command dropdowns, which are absolutely positioned inside this
+       same element and popped below it.) */
+    #chrome { flex-wrap: wrap; row-gap: 6px; }
     #chrome > * { flex-shrink: 0; }
-    #quickcmd-bar { max-width: none; overflow: visible; }
+
+    /* Quick commands collapse into a single "命令" trigger + dropdown grid
+       instead of a row of chips, so they don't eat header width on a phone. */
+    #quickcmd-toggle { display: inline-flex; align-items: center; justify-content: center; }
+    #quickcmd-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      /* left, not right: the widget sits near the left edge of the header,
+         so anchoring to its right edge and growing leftward (like the
+         connections/settings dropdowns do, which sit near the right edge)
+         would push this off the left side of the screen. */
+      left: 0;
+      z-index: 10;
+      display: block;
+      /* fixed (not min/max) width so the grid below has an unambiguous size
+         to divide into columns, instead of shrink-to-fit guessing low */
+      width: 260px;
+      padding: 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(.96) translateY(-4px);
+      transform-origin: top left;
+      transition: opacity .12s ease, transform .12s ease, visibility 0s linear .12s;
+    }
+    #quickcmd-panel.show {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+      transition: opacity .12s ease, transform .12s ease, visibility 0s linear 0s;
+    }
+    #quickcmd-divider { display: block; margin: 8px 2px; }
+    #quickcmd-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      max-width: none;
+      overflow: visible;
+    }
+    .quickcmd-chip { justify-content: center; }
+    .quickcmd-chip .quickcmd-chip-label { max-width: 52px; }
+    #quickcmd-btn { display: flex; width: 100%; justify-content: center; }
   }
   #mobile-keys.force-show { display: flex; }
   #mobile-keys.force-hide { display: none; }
@@ -785,8 +838,14 @@
     <div id="chrome">
       <span class="chrome-title" id="chrome-title" title="点击重命名">webcli</span>
       <span id="version-badge" title="点击 ⋯ 菜单看提交号和时间"></span>
-      <div id="quickcmd-bar"></div>
-      <button id="quickcmd-btn" type="button" title="新增快捷命令">+</button>
+      <div id="quickcmd-widget" class="chrome-dropdown-anchor">
+        <button id="quickcmd-toggle" type="button" title="快捷命令">命令</button>
+        <div id="quickcmd-panel">
+          <div id="quickcmd-bar"></div>
+          <div class="settings-divider" id="quickcmd-divider"></div>
+          <button id="quickcmd-btn" type="button" title="新增快捷命令">+</button>
+        </div>
+      </div>
       <div id="connections-badge" class="chrome-dropdown-anchor" title="点击查看当前连接">
         <span class="conn-dot"></span>
         <span id="conn-count">1</span>
@@ -929,6 +988,7 @@
       function closeAllDropdowns() {
         connDropdown.classList.remove('show');
         settingsDropdown.classList.remove('show');
+        quickcmdPanel.classList.remove('show');
       }
 
       function formatAgo(ts) {
@@ -984,6 +1044,8 @@
       // Stored server-side (not localStorage) so every device that opens this
       // machine's webcli sees the same set of quick commands, not just the
       // browser that created them.
+      const quickcmdToggle = document.getElementById('quickcmd-toggle');
+      const quickcmdPanel = document.getElementById('quickcmd-panel');
       const quickcmdBar = document.getElementById('quickcmd-bar');
       const quickcmdBtn = document.getElementById('quickcmd-btn');
       const quickcmdModal = document.getElementById('quickcmd-modal');
@@ -1028,10 +1090,22 @@
           });
           chip.appendChild(label);
           chip.appendChild(del);
-          chip.addEventListener('click', () => runQuickCommand(item));
+          chip.addEventListener('click', () => {
+            runQuickCommand(item);
+            closeAllDropdowns();
+          });
           quickcmdBar.appendChild(chip);
         });
       }
+      // Only visible on narrow screens (the widget is a plain inline row on
+      // desktop) — opens the same dropdown chrome as connections/settings.
+      quickcmdToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willShow = !quickcmdPanel.classList.contains('show');
+        closeAllDropdowns();
+        quickcmdPanel.classList.toggle('show', willShow);
+      });
+      quickcmdPanel.addEventListener('click', (e) => e.stopPropagation());
       quickcmdBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         closeAllDropdowns();
