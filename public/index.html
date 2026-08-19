@@ -1333,7 +1333,17 @@
         ws.onclose = () => {
           setDot('disconnected');
           if (session.closing) return;
-          session.term.write('\r\n\x1b[31m[connection lost, reconnecting…]\x1b[0m\r\n');
+          // Print once on the initial drop, not on every failed retry (a
+          // failed connection attempt also fires 'close', so without this
+          // guard a server that's genuinely down would spam this line every
+          // few seconds forever). After enough retries in a row (~35s of
+          // backoff), a network blip is a much less likely explanation than
+          // the service having actually been stopped, so say so once.
+          if (session.reconnectAttempts === 0) {
+            session.term.write('\r\n\x1b[31m[connection lost, reconnecting…]\x1b[0m\r\n');
+          } else if (session.reconnectAttempts === 6) {
+            session.term.write('\r\n\x1b[33m[长时间连不上，服务端可能已经关闭，仍会继续自动重试]\x1b[0m\r\n');
+          }
           const delay = Math.min(1000 * 2 ** session.reconnectAttempts, 10000);
           session.reconnectAttempts += 1;
           session.reconnectTimer = setTimeout(() => {

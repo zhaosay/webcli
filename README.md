@@ -187,7 +187,7 @@ WEBCLI_TLS=1 ./start.sh
 | --- | --- | --- |
 | `PROJECT_PORT` | `3050` | 监听端口 |
 | `WEBCLI_TLS` | `0` | `1` 启用自签名 HTTPS |
-| `RECONNECT_GRACE_MS` | `30000` | 断线后会话保留时长（毫秒） |
+| `RECONNECT_GRACE_MS` | `86400000`（24 小时） | 断线后会话保留时长（毫秒） |
 | `SCROLLBACK_BYTES` | `262144` | 重连回放的输出上限 |
 | `LOG_RETENTION_DAYS` | `7` | 会话日志保留天数 |
 | `WEBCLI_UPLOAD_DIR` | `~/webcli-uploads` | 拖拽上传的落地目录 |
