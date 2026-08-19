@@ -671,6 +671,14 @@
   @media (max-width: 700px) {
     #mobile-keys { display: flex; }
     #mobile-keys button { min-width: 42px; padding: 9px 12px; }
+
+    /* Title + version + quick commands + connections/settings/qr/copy-link
+       don't fit on one row on a phone; scroll sideways instead of wrapping
+       or overlapping. */
+    #chrome { overflow-x: auto; scrollbar-width: none; }
+    #chrome::-webkit-scrollbar { display: none; }
+    #chrome > * { flex-shrink: 0; }
+    #quickcmd-bar { max-width: none; overflow: visible; }
   }
   #mobile-keys.force-show { display: flex; }
   #mobile-keys.force-hide { display: none; }
@@ -973,7 +981,9 @@
       refreshConnections();
       setInterval(refreshConnections, 15000);
 
-      const QUICKCMD_STORAGE = 'webcli-quick-commands';
+      // Stored server-side (not localStorage) so every device that opens this
+      // machine's webcli sees the same set of quick commands, not just the
+      // browser that created them.
       const quickcmdBar = document.getElementById('quickcmd-bar');
       const quickcmdBtn = document.getElementById('quickcmd-btn');
       const quickcmdModal = document.getElementById('quickcmd-modal');
@@ -983,17 +993,6 @@
       const quickcmdCwdInput = document.getElementById('quickcmd-cwd-input');
       const quickcmdCancelBtn = document.getElementById('quickcmd-cancel');
 
-      function loadQuickCommands() {
-        try {
-          const parsed = JSON.parse(localStorage.getItem(QUICKCMD_STORAGE) || '[]');
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      }
-      function saveQuickCommands(list) {
-        localStorage.setItem(QUICKCMD_STORAGE, JSON.stringify(list));
-      }
       function runQuickCommand(item) {
         const session = currentSession();
         if (!session || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
@@ -1005,8 +1004,7 @@
         session.ws.send(JSON.stringify({ type: 'input', data: command + '\n' }));
         session.term.focus();
       }
-      function renderQuickCommands() {
-        const list = loadQuickCommands();
+      function renderQuickCommands(list) {
         quickcmdBar.innerHTML = '';
         list.forEach((item) => {
           const chip = document.createElement('div');
@@ -1022,8 +1020,11 @@
           del.title = '删除';
           del.addEventListener('click', (e) => {
             e.stopPropagation();
-            saveQuickCommands(loadQuickCommands().filter((c) => c.id !== item.id));
-            renderQuickCommands();
+            fetch(`/api/quick-commands?${authQuery}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: item.id }),
+            }).then((r) => r.json()).then(({ commands }) => renderQuickCommands(commands || [])).catch(() => {});
           });
           chip.appendChild(label);
           chip.appendChild(del);
@@ -1050,13 +1051,17 @@
         const command = quickcmdCommandInput.value.trim();
         const cwd = quickcmdCwdInput.value.trim();
         if (!label || !command) return;
-        const list = loadQuickCommands();
-        list.push({ id: newSid(), label, command, cwd });
-        saveQuickCommands(list);
-        quickcmdModal.classList.remove('show');
-        renderQuickCommands();
+        fetch(`/api/quick-commands?${authQuery}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, command, cwd }),
+        }).then((r) => r.json()).then(({ commands }) => {
+          quickcmdModal.classList.remove('show');
+          renderQuickCommands(commands || []);
+        }).catch(() => quickcmdModal.classList.remove('show'));
       });
-      renderQuickCommands();
+      fetch(`/api/quick-commands?${authQuery}`).then((r) => r.json())
+        .then(({ commands }) => renderQuickCommands(commands || [])).catch(() => {});
 
       const THEME_STORAGE = 'webcli-theme';
       const themeButtons = document.querySelectorAll('.theme-switch button');

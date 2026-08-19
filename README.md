@@ -81,7 +81,7 @@ flowchart LR
 | 会话记录 | `lib/session-log.js` | 可选把终端输出落盘，按天数自动清理 |
 | 二维码 / 图标 | `lib/qr.js`、`lib/icon.js` | 启动时终端打印二维码、PWA 图标 |
 | 前端 | `public/index.html` | 单文件，[`xterm.js`](https://xtermjs.org/) 渲染终端，原生 WebSocket，无需构建 |
-| 运行时数据 | `../data/webcli/` | token / 电脑名 / 日志 / 证书，存在项目目录**外层**，不进 git、不跨机器共享 |
+| 运行时数据 | `../data/webcli/` | token / 电脑名 / 日志 / 证书 / 快捷命令，存在项目目录**外层**，不进 git、不跨机器共享 |
 
 ```mermaid
 flowchart LR
