@@ -360,6 +360,19 @@
     border-radius: .75rem;
   }
   #quickcmd-modal h3 { margin: 0 0 14px; font-size: 15px; color: var(--text); }
+  #quickcmd-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .quickcmd-preset {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: .375rem;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .quickcmd-preset:hover { background: rgba(127, 127, 127, .1); color: var(--text); }
   #quickcmd-form {
     display: flex;
     flex-direction: column;
@@ -920,6 +933,13 @@
       <div id="quickcmd-modal">
         <div class="quickcmd-card">
           <h3>新增快捷命令</h3>
+          <div id="quickcmd-presets">
+            <button type="button" class="quickcmd-preset" data-label="主目录" data-command="cd ~">主目录</button>
+            <button type="button" class="quickcmd-preset" data-label="目录列表" data-command="ls -la">目录列表</button>
+            <button type="button" class="quickcmd-preset" data-label="切换root" data-command="sudo -i">切换root</button>
+            <button type="button" class="quickcmd-preset" data-label="磁盘用量" data-command="df -h">磁盘用量</button>
+            <button type="button" class="quickcmd-preset" data-label="进程列表" data-command="ps aux">进程列表</button>
+          </div>
           <form id="quickcmd-form">
             <input id="quickcmd-label-input" type="text" placeholder="名称" maxlength="20" autocomplete="off" required>
             <input id="quickcmd-command-input" type="text" placeholder="命令内容" maxlength="200" autocomplete="off" required>
@@ -1119,6 +1139,13 @@
         if (e.target === quickcmdModal) quickcmdModal.classList.remove('show');
       });
       quickcmdCancelBtn.addEventListener('click', () => quickcmdModal.classList.remove('show'));
+      document.querySelectorAll('.quickcmd-preset').forEach((preset) => {
+        preset.addEventListener('click', () => {
+          quickcmdLabelInput.value = preset.dataset.label;
+          quickcmdCommandInput.value = preset.dataset.command;
+          quickcmdCommandInput.focus();
+        });
+      });
       quickcmdForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const label = quickcmdLabelInput.value.trim();
