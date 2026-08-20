@@ -1068,12 +1068,12 @@
 
       const versionInfo = document.getElementById('version-info');
       const versionBadge = document.getElementById('version-badge');
-      fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate, platform }) => {
+      fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate, platform, projectRoot }) => {
         const label = `v${version}${commit ? ' · ' + commit : ''}`;
         versionInfo.textContent = label;
         versionBadge.textContent = `v${version}`;
         if (commitDate) versionInfo.title = commitDate;
-        renderQuickcmdPresets(platform);
+        renderQuickcmdPresets(platform, projectRoot);
       }).catch(() => {});
 
       const connBadge = document.getElementById('connections-badge');
@@ -1236,9 +1236,28 @@
         { label: '磁盘用量', command: 'wmic logicaldisk get Caption,FreeSpace,Size' },
         { label: '进程列表', command: 'tasklist' },
       ];
+      // These three need the project directory as cwd (update/restart) and a
+      // per-OS open-file-manager command, so they're built at render time
+      // instead of living in the static arrays above.
+      function buildManagementPresets(platform, projectRoot) {
+        const cwd = projectRoot || '';
+        if (platform === 'win32') {
+          return [
+            { label: '更新webcli', command: 'start "" /B update.bat', cwd },
+            { label: '重启webcli', command: 'start "" /B restart.bat', cwd },
+            { label: '打开目录', command: 'explorer .' },
+          ];
+        }
+        return [
+          { label: '更新webcli', command: 'nohup ./update.sh > /tmp/webcli-update.log 2>&1 & disown', cwd },
+          { label: '重启webcli', command: 'nohup ./restart.sh --bg > /tmp/webcli-restart.log 2>&1 & disown', cwd },
+          { label: '打开目录', command: platform === 'linux' ? 'xdg-open .' : 'open .' },
+        ];
+      }
       const quickcmdPresetsEl = document.getElementById('quickcmd-presets');
-      function renderQuickcmdPresets(platform) {
-        const presets = platform === 'win32' ? QUICKCMD_PRESETS_WIN32 : QUICKCMD_PRESETS_POSIX;
+      function renderQuickcmdPresets(platform, projectRoot) {
+        const presets = (platform === 'win32' ? QUICKCMD_PRESETS_WIN32 : QUICKCMD_PRESETS_POSIX)
+          .concat(buildManagementPresets(platform, projectRoot));
         quickcmdPresetsEl.innerHTML = '';
         presets.forEach((p) => {
           const btn = document.createElement('button');
@@ -1248,12 +1267,13 @@
           btn.addEventListener('click', () => {
             quickcmdLabelInput.value = p.label;
             quickcmdCommandInput.value = p.command;
+            quickcmdCwdInput.value = p.cwd || '';
             quickcmdCommandInput.focus();
           });
           quickcmdPresetsEl.appendChild(btn);
         });
       }
-      renderQuickcmdPresets('darwin');
+      renderQuickcmdPresets('darwin', '');
       quickcmdForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const label = quickcmdLabelInput.value.trim();
