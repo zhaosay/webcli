@@ -578,7 +578,10 @@
   .pane {
     position: absolute;
     inset: 0;
-    padding: 8px 10px;
+    /* viewport-fit=cover lets the page draw under the iOS home-indicator
+       gesture bar; without this, the terminal's last row renders right
+       under it and ends up half-covered/hard to tap. */
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) 10px;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -767,6 +770,27 @@
   }
   #drop-hint.show { display: flex; }
 
+  /* ---- reload banner (server restarting) ---- */
+  #reload-banner {
+    display: none;
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    max-width: min(90vw, 420px);
+    padding: 8px 16px;
+    border-radius: .5rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    text-align: center;
+  }
+  #reload-banner.show { display: block; }
+
   /* ---- share / QR modal ---- */
   #qr-modal {
     display: none;
@@ -899,6 +923,7 @@
       <button type="button" data-key="ctrl-c">^C</button>
       <button type="button" data-key="ctrl-d">^D</button>
       <button type="button" data-key="ctrl-z">^Z</button>
+      <button type="button" data-key="clear" title="清屏 / clear screen">Clear</button>
       <button type="button" data-key="left">&larr;</button>
       <button type="button" data-key="up">&uarr;</button>
       <button type="button" data-key="down">&darr;</button>
@@ -921,6 +946,7 @@
         <div class="empty-hint">点击左上角 <strong>+</strong> 开一个</div>
       </div>
       <div id="drop-hint">松手上传到 ~/webcli-uploads</div>
+      <div id="reload-banner"></div>
       <div id="qr-modal">
         <div class="qr-card">
           <h3>扫码在手机上打开</h3>
@@ -933,13 +959,7 @@
       <div id="quickcmd-modal">
         <div class="quickcmd-card">
           <h3>新增快捷命令</h3>
-          <div id="quickcmd-presets">
-            <button type="button" class="quickcmd-preset" data-label="主目录" data-command="cd ~">主目录</button>
-            <button type="button" class="quickcmd-preset" data-label="目录列表" data-command="ls -la">目录列表</button>
-            <button type="button" class="quickcmd-preset" data-label="切换root" data-command="sudo -i">切换root</button>
-            <button type="button" class="quickcmd-preset" data-label="磁盘用量" data-command="df -h">磁盘用量</button>
-            <button type="button" class="quickcmd-preset" data-label="进程列表" data-command="ps aux">进程列表</button>
-          </div>
+          <div id="quickcmd-presets"></div>
           <form id="quickcmd-form">
             <input id="quickcmd-label-input" type="text" placeholder="名称" maxlength="20" autocomplete="off" required>
             <input id="quickcmd-command-input" type="text" placeholder="命令内容" maxlength="200" autocomplete="off" required>
@@ -968,6 +988,63 @@
     const token = params.get('token');
     const DEVICE_NAME_STORAGE = 'webcli-device-name';
 
+    // Terminal status lines (connection lost/reconnected/etc.) show English
+    // first, then a translation in the browser's language — only simplified
+    // and traditional Chinese are filled in for now, everyone else just gets
+    // the English line.
+    const UI_LANG = (() => {
+      const lang = (navigator.language || 'en').toLowerCase();
+      if (!lang.startsWith('zh')) return 'en';
+      return /(-|_)(tw|hk|mo)\b|hant/.test(lang) ? 'zh-Hant' : 'zh-Hans';
+    })();
+    const MESSAGES = {
+      reconnected: {
+        en: 'reconnected',
+        'zh-Hans': '已重新连接',
+        'zh-Hant': '已重新連線',
+      },
+      connectionLost: {
+        en: 'connection lost, reconnecting…',
+        'zh-Hans': '连接已断开，正在重连…',
+        'zh-Hant': '連線已中斷，正在重新連線…',
+      },
+      longDisconnect: {
+        en: 'still retrying — the server may be down, will keep trying',
+        'zh-Hans': '长时间连不上，服务端可能已经关闭，仍会继续自动重试',
+        'zh-Hant': '長時間連不上，伺服器可能已經關閉，仍會持續自動重試',
+      },
+      uploaded: {
+        en: 'uploaded',
+        'zh-Hans': '已上传',
+        'zh-Hant': '已上傳',
+      },
+      uploadFailed: {
+        en: 'upload failed',
+        'zh-Hans': '上传失败',
+        'zh-Hant': '上傳失敗',
+      },
+      restarting: {
+        en: 'still reconnecting — if the server restarted (usually 10-20s), this page will reload automatically once it is back',
+        'zh-Hans': '仍在重连——如果服务端正在重启（通常 10~20 秒），恢复后本页会自动刷新',
+        'zh-Hant': '仍在重新連線——如果伺服器正在重新啟動（通常 10~20 秒），恢復後本頁會自動重新整理',
+      },
+      restored: {
+        en: 'back online, reloading…',
+        'zh-Hans': '已恢复，正在刷新…',
+        'zh-Hant': '已恢復，正在重新整理…',
+      },
+      reloadTimeout: {
+        en: 'still not responding after a while — please refresh manually',
+        'zh-Hans': '长时间未恢复，请手动刷新页面',
+        'zh-Hant': '長時間未恢復，請手動重新整理頁面',
+      },
+    };
+    function t(key) {
+      const m = MESSAGES[key];
+      if (!m) return key;
+      return UI_LANG === 'en' ? m.en : `${m.en} / ${m[UI_LANG]}`;
+    }
+
     if (!token) {
       document.getElementById('gate').style.display = 'flex';
       document.getElementById('gate-form').addEventListener('submit', (e) => {
@@ -991,11 +1068,12 @@
 
       const versionInfo = document.getElementById('version-info');
       const versionBadge = document.getElementById('version-badge');
-      fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate }) => {
+      fetch('/api/version').then((r) => r.json()).then(({ version, commit, commitDate, platform }) => {
         const label = `v${version}${commit ? ' · ' + commit : ''}`;
         versionInfo.textContent = label;
         versionBadge.textContent = `v${version}`;
         if (commitDate) versionInfo.title = commitDate;
+        renderQuickcmdPresets(platform);
       }).catch(() => {});
 
       const connBadge = document.getElementById('connections-badge');
@@ -1139,13 +1217,43 @@
         if (e.target === quickcmdModal) quickcmdModal.classList.remove('show');
       });
       quickcmdCancelBtn.addEventListener('click', () => quickcmdModal.classList.remove('show'));
-      document.querySelectorAll('.quickcmd-preset').forEach((preset) => {
-        preset.addEventListener('click', () => {
-          quickcmdLabelInput.value = preset.dataset.label;
-          quickcmdCommandInput.value = preset.dataset.command;
-          quickcmdCommandInput.focus();
+
+      // The shell being controlled is whatever OS the *server* runs on, not
+      // the browser's — these presets are useless (or outright fail) on the
+      // other kind of shell, so pick the set that matches process.platform
+      // from /api/version once it resolves (defaults to POSIX meanwhile).
+      const QUICKCMD_PRESETS_POSIX = [
+        { label: '主目录', command: 'cd ~' },
+        { label: '目录列表', command: 'ls -la' },
+        { label: '切换root', command: 'sudo -i' },
+        { label: '磁盘用量', command: 'df -h' },
+        { label: '进程列表', command: 'ps aux' },
+      ];
+      const QUICKCMD_PRESETS_WIN32 = [
+        { label: '主目录', command: 'cd %USERPROFILE%' },
+        { label: '目录列表', command: 'dir' },
+        { label: '管理员窗口', command: 'powershell Start-Process cmd -Verb RunAs' },
+        { label: '磁盘用量', command: 'wmic logicaldisk get Caption,FreeSpace,Size' },
+        { label: '进程列表', command: 'tasklist' },
+      ];
+      const quickcmdPresetsEl = document.getElementById('quickcmd-presets');
+      function renderQuickcmdPresets(platform) {
+        const presets = platform === 'win32' ? QUICKCMD_PRESETS_WIN32 : QUICKCMD_PRESETS_POSIX;
+        quickcmdPresetsEl.innerHTML = '';
+        presets.forEach((p) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'quickcmd-preset';
+          btn.textContent = p.label;
+          btn.addEventListener('click', () => {
+            quickcmdLabelInput.value = p.label;
+            quickcmdCommandInput.value = p.command;
+            quickcmdCommandInput.focus();
+          });
+          quickcmdPresetsEl.appendChild(btn);
         });
-      });
+      }
+      renderQuickcmdPresets('darwin');
       quickcmdForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const label = quickcmdLabelInput.value.trim();
@@ -1345,7 +1453,7 @@
       document.getElementById('search-close').addEventListener('click', closeSearch);
 
       const MOBILE_KEY_SEQ = {
-        esc: '\x1b', tab: '\t', 'ctrl-c': '\x03', 'ctrl-d': '\x04', 'ctrl-z': '\x1a',
+        esc: '\x1b', tab: '\t', 'ctrl-c': '\x03', 'ctrl-d': '\x04', 'ctrl-z': '\x1a', clear: '\x0c',
         up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C',
         home: '\x1b[H', end: '\x1b[F', pgup: '\x1b[5~', pgdn: '\x1b[6~',
         dash: '-', underscore: '_', slash: '/', pipe: '|', tilde: '~', star: '*',
@@ -1422,6 +1530,28 @@
         return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       }
 
+      // A reconnect taking this long could be the server actually restarting
+      // (e.g. a quick command like the "重启webcli" one) rather than just a
+      // slow network — shown as a heads-up while still trying. Whether it
+      // really was a restart is only confirmed later, from the 'hello'
+      // message's `existed` flag (see ws.onmessage below): true reloads,
+      // false means it was a false alarm and the banner is just hidden.
+      const reloadBanner = document.getElementById('reload-banner');
+      let reloadBannerTimeout = null;
+      function showReloadBanner(text) {
+        reloadBanner.textContent = text;
+        reloadBanner.classList.add('show');
+      }
+      function hideReloadBanner() {
+        reloadBanner.classList.remove('show');
+        if (reloadBannerTimeout) { clearTimeout(reloadBannerTimeout); reloadBannerTimeout = null; }
+      }
+      function armLongDisconnectBanner() {
+        if (reloadBanner.classList.contains('show')) return;
+        showReloadBanner(t('restarting'));
+        reloadBannerTimeout = setTimeout(() => showReloadBanner(t('reloadTimeout')), 90000);
+      }
+
       function connectWs(session) {
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
         const keyParam = secondaryKey ? `&key=${encodeURIComponent(secondaryKey)}` : '';
@@ -1438,7 +1568,11 @@
           setDot('connected');
           const wasReconnect = session.reconnectAttempts > 0;
           session.reconnectAttempts = 0;
-          if (wasReconnect) session.term.write('\r\n\x1b[2m[reconnected]\x1b[0m\r\n');
+          // Resolved in the 'hello' handler below, once we know whether the
+          // server actually still remembers this session (a plain network
+          // blip) or not (the server process itself restarted).
+          session.awaitingRestartCheck = wasReconnect;
+          if (wasReconnect) session.term.write(`\r\n\x1b[2m[${t('reconnected')}]\x1b[0m\r\n`);
           // Panes stay in layout (hidden via opacity, not display:none) so
           // fit() reports a real size even for an inactive tab — always fit
           // on connect. Gating this on "is this the active tab" broke
@@ -1458,6 +1592,21 @@
             try { msg = JSON.parse(e.data); } catch { return; }
             if (msg.type === 'hello') {
               if (msg.resumed) session.term.reset();
+              if (session.awaitingRestartCheck) {
+                if (msg.existed) {
+                  // False alarm — just a slow network, the shell never died.
+                  hideReloadBanner();
+                } else {
+                  // The server has no memory of this session: it restarted
+                  // (or crashed and came back) while we were disconnected.
+                  // The freshly-created session we just landed in is a
+                  // stand-in the client can't do much useful with (new pty,
+                  // wrong cwd, empty scrollback) — reload for a clean start.
+                  showReloadBanner(t('restored'));
+                  setTimeout(() => location.reload(), 600);
+                }
+              }
+              session.awaitingRestartCheck = false;
               if (msg.title) applyAutoTitle(session, msg.title);
               saveSids();
             } else if (msg.type === 'title') {
@@ -1477,9 +1626,10 @@
           // backoff), a network blip is a much less likely explanation than
           // the service having actually been stopped, so say so once.
           if (session.reconnectAttempts === 0) {
-            session.term.write('\r\n\x1b[31m[connection lost, reconnecting…]\x1b[0m\r\n');
+            session.term.write(`\r\n\x1b[31m[${t('connectionLost')}]\x1b[0m\r\n`);
           } else if (session.reconnectAttempts === 6) {
-            session.term.write('\r\n\x1b[33m[长时间连不上，服务端可能已经关闭，仍会继续自动重试]\x1b[0m\r\n');
+            session.term.write(`\r\n\x1b[33m[${t('longDisconnect')}]\x1b[0m\r\n`);
+            armLongDisconnectBanner();
           }
           const delay = Math.min(1000 * 2 ** session.reconnectAttempts, 10000);
           session.reconnectAttempts += 1;
@@ -1752,9 +1902,9 @@
               });
               const data = await res.json();
               if (!res.ok) throw new Error(data.error || 'failed');
-              if (session) session.term.write(`\r\n\x1b[36m[已上传] ${data.path}\x1b[0m\r\n`);
+              if (session) session.term.write(`\r\n\x1b[36m[${t('uploaded')}] ${data.path}\x1b[0m\r\n`);
             } catch (err) {
-              if (session) session.term.write(`\r\n\x1b[31m[上传失败] ${err.message}\x1b[0m\r\n`);
+              if (session) session.term.write(`\r\n\x1b[31m[${t('uploadFailed')}] ${err.message}\x1b[0m\r\n`);
             }
           }
         });
