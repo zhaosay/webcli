@@ -1797,6 +1797,14 @@
         updateEmptyState();
         updateNewTabBtn();
 
+        // Fit before the first connect, not after: connectWs() reads
+        // term.cols/rows to size the pty from the very first handshake. Without
+        // this, a brand-new session's pty always starts at xterm.js's built-in
+        // 80x24 default (not the real pane size) until the post-connect
+        // fit()+resize catches up — a window a program that reads its column
+        // count once at startup (instead of listening for resize) can fall
+        // into permanently, rendering too wide for the rest of the session.
+        fitAddon.fit();
         connectWs(session);
 
         term.onData((data) => sendInput(session, data));
