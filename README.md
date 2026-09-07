@@ -27,7 +27,7 @@ cd webcli
 | 操作 | macOS | Windows |
 | --- | --- | --- |
 | 启动 | 双击 `start.command` | 双击 `start.bat` |
-| 日常控制面板（推荐） | 双击 `webcli.command` | 见下方[控制面板](#控制面板推荐日常入口) |
+| 日常控制面板（推荐） | 双击 `webcli.command` | 双击 `webcli.bat`，见下方[控制面板](#控制面板推荐日常入口) |
 | 端口被占用 | 已自动清理，见[已知问题](#已知问题) | 同左 |
 
 ```mermaid
@@ -50,7 +50,7 @@ flowchart LR
 
 ## 控制面板（推荐日常入口）
 
-不想记一堆脚本名字，双击 `webcli.command`（macOS）或跑 `./webcli.sh`，是个选数字的菜单：
+不想记一堆脚本名字，双击 `webcli.command`（macOS）或跑 `./webcli.sh`；Windows 双击 `webcli.bat`，菜单结构完全一样。是个选数字的菜单：
 
 ```
   状态   ● 运行中 (端口 3050)

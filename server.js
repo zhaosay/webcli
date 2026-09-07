@@ -8,7 +8,7 @@ const {
   PORT, DATA_DIR, PID_FILE, USE_TLS, TLS_KEY_FILE, TLS_CERT_FILE,
 } = require('./lib/config');
 const { TOKEN } = require('./lib/auth');
-const { createRequestHandler } = require('./lib/routes');
+const { createRequestHandler, cleanupOldUploads } = require('./lib/routes');
 const {
   handleUpgrade, shutdownAll, startHeartbeat, startTitlePoll,
 } = require('./lib/pty-sessions');
@@ -56,6 +56,10 @@ if (USE_TLS) {
 }
 if (!server) server = http.createServer(handler);
 
+server.on('error', (err) => {
+  console.error(`[webcli] server error: ${err.message}`);
+});
+
 const wss = new WebSocket.Server({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
@@ -65,14 +69,29 @@ server.on('upgrade', (req, socket, head) => {
 const heartbeat = startHeartbeat(wss);
 startTitlePoll();
 
-function shutdown() {
+function shutdown(code = 0) {
   clearInterval(heartbeat);
   shutdownAll();
   try { fs.unlinkSync(PID_FILE); } catch {}
-  process.exit(0);
+  process.exit(code);
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Route handlers already guard against throwing (createRequestHandler wraps
+// its dispatch in try/catch), but anything that still slips through — a bug
+// in a future route, an async callback with no .catch — must not leave the
+// process in Node's documented-as-unsafe "resume after uncaughtException"
+// state. Log it and go through the same clean pty/pid-file teardown as a
+// normal shutdown, rather than either a silent resume or a raw crash.
+process.on('uncaughtException', (err) => {
+  console.error('[webcli] uncaught exception, shutting down:', err);
+  shutdown(1);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[webcli] unhandled rejection, shutting down:', err);
+  shutdown(1);
+});
 
 server.listen(PORT, '0.0.0.0', () => {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -87,7 +106,9 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`[webcli] version: v${VERSION_INFO.version}${commitLabel}`);
   const removedLogs = cleanupOldLogs();
   if (removedLogs) console.log(`[webcli] cleaned up ${removedLogs} expired session log(s)`);
-  setInterval(cleanupOldLogs, 24 * 60 * 60 * 1000).unref();
+  const removedUploads = cleanupOldUploads();
+  if (removedUploads) console.log(`[webcli] cleaned up ${removedUploads} expired upload(s)`);
+  setInterval(() => { cleanupOldLogs(); cleanupOldUploads(); }, 24 * 60 * 60 * 1000).unref();
 
   console.log(`[webcli] listening on 0.0.0.0:${PORT}${tlsActive ? ' (TLS, self-signed)' : ''}`);
   console.log('');
