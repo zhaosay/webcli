@@ -59,6 +59,21 @@
       return UI_LANG === 'en' ? m.en : `${m.en} / ${m[UI_LANG]}`;
     }
 
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    }
+
     if (!token) {
       document.getElementById('gate').style.display = 'flex';
       document.getElementById('gate-form').addEventListener('submit', (e) => {
@@ -410,18 +425,7 @@
       const copyLinkCopiedLabel = '已复制';
       copyLinkBtn.title = location.href;
       copyLinkBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(location.href);
-        } catch {
-          const ta = document.createElement('textarea');
-          ta.value = location.href;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-        }
+        await copyText(location.href);
         copyLinkBtn.innerHTML = copyLinkCopiedLabel;
         copyLinkBtn.classList.add('copied');
         setTimeout(() => {
@@ -796,6 +800,16 @@
           if (e.key === 'Escape' && searchBar.classList.contains('show')) {
             e.preventDefault();
             closeSearch();
+            return false;
+          }
+          // xterm.js's own Ctrl/Cmd+C copy relies on the browser having a real
+          // DOM selection to fire a native "copy" event from; the canvas
+          // renderer's drag-selection highlight isn't backed by one, so that
+          // path silently does nothing (especially for multi-line selections).
+          // Copy the buffer selection directly instead.
+          if (mod && e.key.toLowerCase() === 'c' && term.hasSelection()) {
+            e.preventDefault();
+            copyText(term.getSelection());
             return false;
           }
           return true;
