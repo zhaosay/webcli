@@ -115,9 +115,22 @@ start_background() {
     if ! kill -0 "$shell_pid" 2>/dev/null; then
       if grep -q "EADDRINUSE" "$LOG_FILE" 2>/dev/null; then
         say "端口 $PORT 被别的程序占用（不是 webcli，所以没有动它）"
+        local block_pid=""
+        command -v lsof >/dev/null 2>&1 && block_pid="$(lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null | head -1)"
+        if [ -n "$block_pid" ]; then
+          say "占用它的进程:"
+          ps -p "$block_pid" -o pid,command 2>/dev/null
+          read -r -p "[webcli] 结束这个进程（pid ${block_pid}）并重新启动吗？[y/N] " killyn
+          if [[ "$killyn" =~ ^[Yy]$ ]]; then
+            kill -9 "$block_pid" 2>/dev/null
+            sleep 0.5
+            say "已结束，重新启动..."
+            start_background
+            return $?
+          fi
+        fi
         say "临时换一次: PROJECT_PORT=3060 ./restart.sh --bg"
         say "固定换端口: ./port.sh set 3060 然后 ./restart.sh --bg"
-        command -v lsof >/dev/null 2>&1 && lsof -i "tcp:$PORT" -sTCP:LISTEN 2>/dev/null | head -3
       else
         say "启动失败，日志如下:"
         echo "-----"; tail -20 "$LOG_FILE"; echo "-----"

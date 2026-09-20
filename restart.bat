@@ -112,11 +112,22 @@ if not errorlevel 1 (
 findstr /C:"EADDRINUSE" "%LOG_FILE%" >nul 2>&1
 if not errorlevel 1 (
   echo [webcli] 端口 %PORT% 被别的程序占用（不是 webcli，所以没有动它）
-  echo.
-  echo [webcli] 占用它的进程（最后一列是 PID）:
-  netstat -ano | findstr /R /C:"LISTENING" | findstr /C:":%PORT% "
-  echo.
-  echo [webcli] 如果确认那个 PID 不是别的正经程序，可以手动结束: taskkill /PID ^<上面的PID^> /F
+  set "BLOCK_PID="
+  for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:"LISTENING" ^| findstr /C:":%PORT% "') do set "BLOCK_PID=%%P"
+  if defined BLOCK_PID (
+    echo.
+    echo [webcli] 占用它的进程:
+    tasklist /FI "PID eq !BLOCK_PID!"
+    echo.
+    set "KILLYN="
+    set /p "KILLYN=结束这个进程（PID !BLOCK_PID!）并重新启动吗？[y/N] "
+    if /I "!KILLYN!"=="y" (
+      taskkill /PID !BLOCK_PID! /F
+      timeout /t 1 /nobreak >nul
+      echo [webcli] 已结束，重新启动...
+      goto bg
+    )
+  )
   echo [webcli] 临时换一次: set PROJECT_PORT=3060 ^&^& restart.bat --bg
   echo [webcli] 固定换端口: port.bat set 3060 然后 restart.bat --bg
   goto :eof
