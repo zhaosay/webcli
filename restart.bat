@@ -6,13 +6,9 @@ cd /d "%~dp0"
 set "PID_FILE=..\data\webcli\server.pid"
 set "LOG_FILE=.run\run.log"
 set "PORT_FILE=..\data\webcli\port.txt"
-if not "%PROJECT_PORT%"=="" (
-  set "PORT=%PROJECT_PORT%"
-) else if exist "%PORT_FILE%" (
-  set /p PORT=<"%PORT_FILE%"
-) else (
-  set "PORT=3050"
-)
+set "PORT=3050"
+if exist "%PORT_FILE%" set /p PORT=<"%PORT_FILE%"
+if not "%PROJECT_PORT%"=="" set "PORT=%PROJECT_PORT%"
 
 if "%~1"=="stop" goto stop
 if "%~1"=="status" goto status
@@ -43,16 +39,20 @@ REM available without extra tools is the command line: start.bat launches
 REM with an absolute path (`node <projectdir>\server.js`), so a real
 REM instance's command line always contains both "server.js" and this
 REM project's own directory.
+REM
+REM wmic.exe is removed by default on Windows 11 24H2+, so the command-line
+REM lookup goes through PowerShell's CIM cmdlet instead - it ships with every
+REM supported Windows version and keeps working after wmic is gone.
 REM ---------------------------------------------------------------------
 :is_ours
 set "IS_OURS=0"
-for /f "usebackq tokens=1,* delims==" %%A in (`wmic process where "ProcessId=%~1" get CommandLine /value 2^>nul`) do (
-  if /I "%%A"=="CommandLine" (
-    echo %%B | findstr /I "server.js" >nul
-    if not errorlevel 1 (
-      echo %%B | findstr /I /C:"%CD%" >nul
-      if not errorlevel 1 set "IS_OURS=1"
-    )
+set "CMDLINE="
+for /f "usebackq delims=" %%C in (`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"ProcessId=%~1\" -ErrorAction SilentlyContinue ^| Select-Object -ExpandProperty CommandLine" 2^>nul`) do set "CMDLINE=%%C"
+if defined CMDLINE (
+  echo !CMDLINE! | findstr /I "server.js" >nul
+  if not errorlevel 1 (
+    echo !CMDLINE! | findstr /I /C:"%CD%" >nul
+    if not errorlevel 1 set "IS_OURS=1"
   )
 )
 exit /b 0
@@ -112,7 +112,8 @@ if not errorlevel 1 (
 findstr /C:"EADDRINUSE" "%LOG_FILE%" >nul 2>&1
 if not errorlevel 1 (
   echo [webcli] 端口 %PORT% 被别的程序占用（不是 webcli，所以没有动它）
-  echo [webcli] 换个端口: set PROJECT_PORT=3060 ^&^& restart.bat --bg
+  echo [webcli] 临时换一次: set PROJECT_PORT=3060 ^&^& restart.bat --bg
+  echo [webcli] 固定换端口: port.bat set 3060 然后 restart.bat --bg
   goto :eof
 )
 if %TRIES% GEQ 240 (

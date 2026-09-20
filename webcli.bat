@@ -80,13 +80,9 @@ cls
 echo   webcli 控制面板
 echo   %CD%
 echo.
-if not "%PROJECT_PORT%"=="" (
-  set "PORT=%PROJECT_PORT%"
-) else if exist "%DATA_DIR%\port.txt" (
-  set /p PORT=<"%DATA_DIR%\port.txt"
-) else (
-  set "PORT=3050"
-)
+set "PORT=3050"
+if exist "%DATA_DIR%\port.txt" set /p PORT=<"%DATA_DIR%\port.txt"
+if not "%PROJECT_PORT%"=="" set "PORT=%PROJECT_PORT%"
 call restart.bat status >nul 2>&1
 if not errorlevel 1 (
   echo   状态   [运行中] (端口 %PORT%)

@@ -32,15 +32,9 @@ echo [webcli] 端口已设置为 %NEWPORT%，重启服务后生效（面板选 1
 goto :eof
 
 :status
-if "%PROJECT_PORT%"=="" (
-  if exist "%PORT_FILE%" (
-    set /p CUR_PORT=<"%PORT_FILE%"
-  ) else (
-    set "CUR_PORT=3050"
-  )
-) else (
-  set "CUR_PORT=%PROJECT_PORT%"
-)
+set "CUR_PORT=3050"
+if exist "%PORT_FILE%" set /p CUR_PORT=<"%PORT_FILE%"
+if not "%PROJECT_PORT%"=="" set "CUR_PORT=%PROJECT_PORT%"
 echo [webcli] 当前配置端口: %CUR_PORT%
 if not "%PROJECT_PORT%"=="" (
   echo [webcli] 环境变量 PROJECT_PORT=%PROJECT_PORT% 当前优先生效，覆盖了保存的端口
