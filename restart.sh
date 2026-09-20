@@ -12,7 +12,8 @@ cd "$(dirname "$0")"
 DIR="$(pwd)"
 PID_FILE="../data/webcli/server.pid"
 LOG_FILE=".run/run.log"
-PORT="${PROJECT_PORT:-3050}"
+PORT_FILE="../data/webcli/port.txt"
+PORT="${PROJECT_PORT:-$(cat "$PORT_FILE" 2>/dev/null || echo 3050)}"
 
 say() { echo "[webcli] $*"; }
 

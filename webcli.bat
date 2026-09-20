@@ -1,11 +1,11 @@
 @echo off
+chcp 65001 >nul
 REM webcli 控制面板 (Windows)：选数字就能启动 / 停止 / 更新 / 看二维码。
 REM 只是把已有的 restart.bat / update.bat / auth.bat / token.bat / log.bat / uninstall.bat
 REM 包一层，不重复实现任何逻辑 —— 对齐 webcli.sh 的菜单结构。
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-if "%PROJECT_PORT%"=="" (set "PORT=3050") else (set "PORT=%PROJECT_PORT%")
 set "LOG_FILE=.run\run.log"
 set "DATA_DIR=..\data\webcli"
 
@@ -20,6 +20,7 @@ if "%~1"=="4" goto arg_link
 if /I "%~1"=="link" goto arg_link
 if /I "%~1"=="install" goto arg_install
 if /I "%~1"=="uninstall" goto arg_uninstall
+if /I "%~1"=="port" goto arg_port
 goto help
 
 :arg_restart
@@ -46,8 +47,12 @@ exit /b 0
 call :do_uninstall
 exit /b 0
 
+:arg_port
+call port.bat %2 %3
+exit /b %errorlevel%
+
 :help
-echo 用法: webcli [1^|2^|3^|4^|install^|uninstall]
+echo 用法: webcli [1^|2^|3^|4^|install^|uninstall^|port]
 echo   不带参数进交互菜单；1 重启 / 2 停止 / 3 更新重启 / 4 显示二维码
 exit /b 0
 
@@ -64,6 +69,7 @@ if "%CHOICE%"=="6" call :do_token
 if "%CHOICE%"=="7" call :do_log
 if "%CHOICE%"=="8" call :do_logs
 if "%CHOICE%"=="9" call :do_install_cli
+if /I "%CHOICE%"=="p" call :do_port
 if /I "%CHOICE%"=="u" (call :do_uninstall & goto :eof)
 if "%CHOICE%"=="0" goto :eof
 if /I "%CHOICE%"=="q" goto :eof
@@ -74,6 +80,13 @@ cls
 echo   webcli 控制面板
 echo   %CD%
 echo.
+if not "%PROJECT_PORT%"=="" (
+  set "PORT=%PROJECT_PORT%"
+) else if exist "%DATA_DIR%\port.txt" (
+  set /p PORT=<"%DATA_DIR%\port.txt"
+) else (
+  set "PORT=3050"
+)
 call restart.bat status >nul 2>&1
 if not errorlevel 1 (
   echo   状态   [运行中] (端口 %PORT%)
@@ -102,7 +115,7 @@ echo   4  显示访问链接和二维码
 echo.
 echo   5  二次验证开关     6  重新生成 token
 echo   7  会话记录开关     8  查看日志
-echo   9  安装全局 webcli 命令
+echo   9  安装全局 webcli 命令   p  修改监听端口
 echo   u  卸载 webcli（删除所有数据和代码）
 echo   0  退出
 echo.
@@ -215,5 +228,27 @@ exit /b 0
 echo.
 call uninstall.bat
 echo.
+pause
+exit /b 0
+
+:do_port
+echo.
+call port.bat status
+echo.
+set /p "NEWPORT=输入新端口号（留空取消）: "
+if "%NEWPORT%"=="" (
+  pause
+  exit /b 0
+)
+call port.bat set %NEWPORT%
+if errorlevel 1 (
+  pause
+  exit /b 0
+)
+call restart.bat status >nul 2>&1
+if not errorlevel 1 (
+  set /p "YN=服务正在运行，现在重启生效吗？[Y/n] "
+  if /I not "!YN!"=="n" call restart.bat --bg
+)
 pause
 exit /b 0

@@ -1,10 +1,18 @@
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 set "PID_FILE=..\data\webcli\server.pid"
 set "LOG_FILE=.run\run.log"
-if "%PROJECT_PORT%"=="" (set "PORT=3050") else (set "PORT=%PROJECT_PORT%")
+set "PORT_FILE=..\data\webcli\port.txt"
+if not "%PROJECT_PORT%"=="" (
+  set "PORT=%PROJECT_PORT%"
+) else if exist "%PORT_FILE%" (
+  set /p PORT=<"%PORT_FILE%"
+) else (
+  set "PORT=3050"
+)
 
 if "%~1"=="stop" goto stop
 if "%~1"=="status" goto status

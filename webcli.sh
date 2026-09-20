@@ -16,7 +16,7 @@ while [ -L "$SELF" ]; do
 done
 cd "$(dirname "$SELF")"
 
-PORT="${PROJECT_PORT:-3050}"
+PORT_FILE="../data/webcli/port.txt"
 LOG_FILE=".run/run.log"
 
 BOLD=$'\033[1m'; DIM=$'\033[2m'; GREEN=$'\033[32m'; RED=$'\033[31m'
@@ -25,6 +25,7 @@ YELLOW=$'\033[33m'; CYAN=$'\033[36m'; RESET=$'\033[0m'
 pause() { echo; read -r -p "${DIM}回车返回菜单${RESET} " _; }
 running() { ./restart.sh status >/dev/null 2>&1; }
 flag_on() { [ -f "../data/webcli/$1" ] && [ "$(cat "../data/webcli/$1" 2>/dev/null)" = "1" ]; }
+current_port() { echo "${PROJECT_PORT:-$(cat "$PORT_FILE" 2>/dev/null || echo 3050)}"; }
 
 header() {
   clear 2>/dev/null || true
@@ -32,7 +33,7 @@ header() {
   echo "  ${DIM}$(pwd)${RESET}"
   echo
   if running; then
-    echo "  状态   ${GREEN}● 运行中${RESET} ${DIM}(端口 $PORT)${RESET}"
+    echo "  状态   ${GREEN}● 运行中${RESET} ${DIM}(端口 $(current_port))${RESET}"
     local link
     link="$(grep -m1 'open:' "$LOG_FILE" 2>/dev/null | sed 's/.*open: //')"
     [ -n "$link" ] && echo "  链接   ${CYAN}$link${RESET}"
@@ -49,7 +50,7 @@ header() {
   echo
   echo "  ${DIM}5  二次验证开关     6  重新生成 token${RESET}"
   echo "  ${DIM}7  会话记录开关     8  查看日志${RESET}"
-  echo "  ${DIM}9  安装全局 webcli 命令${RESET}"
+  echo "  ${DIM}9  安装全局 webcli 命令   p  修改监听端口${RESET}"
   echo "  ${DIM}u  卸载 webcli（删除所有数据和代码）${RESET}"
   echo "  ${DIM}0  退出${RESET}"
   echo
@@ -163,6 +164,20 @@ do_install_cli() {
   esac
 }
 
+do_port() {
+  echo
+  ./port.sh status
+  echo
+  read -r -p "输入新端口号（留空取消）: " newport
+  [ -z "$newport" ] && { pause; return; }
+  ./port.sh set "$newport" || { pause; return; }
+  if running; then
+    read -r -p "服务正在运行，现在重启生效吗？[Y/n] " yn
+    [[ "$yn" =~ ^[Nn]$ ]] || ./restart.sh --bg
+  fi
+  pause
+}
+
 do_uninstall() {
   echo
   # uninstall.sh does its own irreversible-action confirmation (must type
@@ -182,8 +197,9 @@ if [ $# -gt 0 ]; then
     4|link)    do_link; exit 0 ;;
     install)   do_install_cli; exit $? ;;
     uninstall) do_uninstall; exit $? ;;
+    port)      ./port.sh "${2:-}" "${3:-}"; exit $? ;;
     -h|--help)
-      echo "用法: webcli [1|2|3|4|install|uninstall]"
+      echo "用法: webcli [1|2|3|4|install|uninstall|port]"
       echo "  不带参数进交互菜单；1 重启 / 2 停止 / 3 更新重启 / 4 显示二维码"
       exit 0 ;;
   esac
@@ -202,6 +218,7 @@ while true; do
     7) do_log ;;
     8) do_logs ;;
     9) echo; do_install_cli; pause ;;
+    p|P) do_port ;;
     u|U) do_uninstall ;;
     0|q|Q) echo; exit 0 ;;
     *) ;;
